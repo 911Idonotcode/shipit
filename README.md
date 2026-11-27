@@ -8,6 +8,7 @@
 - Each opened door is saved as a small record **in the runner's own Bluesky account** (AT Protocol), so runners own their data. *Delete my data* in Settings removes it.
 - After opening a door, runners add a photo. The app overlays their stats (day, distance, time, pace, streak) and lets them **post to Bluesky** in one tap or **share to Instagram** through the phone's share sheet.
 - Personal stats: doors opened, day streak, total miles/km.
+- **Two plans:** Easy going (1–5 mi weekdays, 7 on Saturdays, short varied Sundays) and Intermediate (2–6 mi weekdays with hill repeats, intervals and a tempo; Saturdays build to 10; low Sundays). Team creators pick their team's plan; solo runners pick in Settings. Both plans live in `SCHEDULES` in `src/config.ts`.
 - **Solo or teams:** everyone gets their own calendar. Anyone can start a team (name + emoji) and share an invite link; runners can be on several teams. Team boards show teammates' days, distance and a ✓ for an active streak, with no rankings.
 - **Admin overview** for the creator (`ADMIN_HANDLES` in `src/config.ts`): totals, every participant, their teams, and a CSV download. The creator can also **add or remove people from teams** (kept in a roster record in the creator's account, applied by the app everywhere). All records are public on the AT Protocol network, so this is a convenience view, not a lock.
 - Optional **Strava import** (see [STRAVA_SETUP.md](STRAVA_SETUP.md)).

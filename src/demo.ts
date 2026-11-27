@@ -13,7 +13,7 @@ export function demoSession(): Session {
       year: 2026, day: d, distanceMeters: 1609 * (1 + (d % 4)), durationSeconds: 600 * (1 + (d % 4)), completedAt: new Date().toISOString(),
     })
   }
-  const teamNames = [{ name: 'Hill Hustlers', emoji: '🏔️' }, { name: 'Cocoa Crew', emoji: '☕' }]
+  const teamNames = [{ name: 'Hill Hustlers', emoji: '🏔️', level: 'easy' }, { name: 'Cocoa Crew', emoji: '☕', level: 'intermediate' }]
   teamNames.forEach((t, i) => records.set(key('io.github.911idonotcode.runadvent.team', `tdemo${i + 1}`), { ...t, createdAt: '' }))
   if (new URLSearchParams(location.search).has('demo-teams')) {
     records.set(key('io.github.911idonotcode.runadvent.profile', 'self'), {

@@ -150,7 +150,7 @@ export async function loadTeam(uri: string): Promise<Team | null> {
     const pds = await pdsOf(did)
     const res = await getJson(`${pds}/xrpc/com.atproto.repo.getRecord?${new URLSearchParams({ repo: did, collection, rkey })}`)
     const v = res.value as Team
-    return { name: String(v.name || 'Team').slice(0, 40), emoji: String(v.emoji || '🏃').slice(0, 8), createdAt: v.createdAt }
+    return { name: String(v.name || 'Team').slice(0, 40), emoji: String(v.emoji || '🏃').slice(0, 8), level: v.level === 'intermediate' ? 'intermediate' : 'easy', createdAt: v.createdAt }
   } catch {
     return null
   }

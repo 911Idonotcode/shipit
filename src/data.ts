@@ -1,5 +1,5 @@
 import type { Agent } from '@atproto/api'
-import { COLLECTION_DAY, COLLECTION_PROFILE, COLLECTION_ROSTER, COLLECTION_TEAM, YEAR } from './config'
+import { COLLECTION_DAY, COLLECTION_PROFILE, COLLECTION_ROSTER, COLLECTION_TEAM, YEAR, type Plan } from './config'
 
 export type Units = 'mi' | 'km'
 
@@ -10,6 +10,8 @@ export interface Profile {
   showOnBoard?: boolean
   /** at:// URIs of the teams this runner belongs to. */
   teams?: string[]
+  /** Plan to follow when not on a team. */
+  plan?: Plan
   /** Teams the runner chose to leave (overrides an organizer add). */
   leftTeams?: string[]
   /** User ticked the "own risk / health disclaimer" box. */
@@ -102,6 +104,8 @@ export async function deleteAll(agent: Agent, did: string) {
 export interface Team {
   name: string
   emoji: string
+  /** Training plan the team follows (default: easy). */
+  level?: Plan
   createdAt: string
 }
 
@@ -116,6 +120,12 @@ export async function createTeam(agent: Agent, did: string, team: Team): Promise
     validate: false,
   })
   return res.data.uri
+}
+
+/** The creator can update their own team record (e.g. change its plan). */
+export async function updateTeam(agent: Agent, uri: string, team: Team) {
+  const [, , did, , rkey] = uri.split('/')
+  await agent.com.atproto.repo.putRecord({ repo: did, collection: COLLECTION_TEAM, rkey, record: { $type: COLLECTION_TEAM, ...team }, validate: false })
 }
 
 /** Short invite code: "<did>~<rkey>" ⇄ at://<did>/<team collection>/<rkey> */

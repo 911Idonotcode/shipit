@@ -376,14 +376,14 @@ function openLog(day: number) {
   openSheet(`
     <p class="eyebrow">Day ${day} · ${monthDay(day)}${kind(day)}${day < currentDay() ? ' · catching up' : ''}</p>
     <h2>${esc(t.title)}</h2>
-    <p class="target-chip">Suggested distance: <b>${fmtDist(milesToUnits(t.miles, u), u)}</b></p>
-    <p class="small">Enter the distance you actually covered. Any amount counts.</p>
+    <p class="target-chip">Suggested: <b>${fmtDist(milesToUnits(t.miles, u), u)}</b>${isWeekend(day) ? ' · run or walk' : ''}</p>
+    <p class="small">We've filled in the suggestion. Did more or less? Just change it. It's all good. 💛</p>
     ${stravaEnabled() ? (stravaConnected()
       ? `<button class="btn btn-strava" type="button" data-import>Import from Strava</button><div class="strava-list" hidden></div>`
       : `<button class="link strava-link" type="button" data-connect>Connect Strava to import your runs</button>`) : ''}
     <form class="log" novalidate>
       <div class="row">
-        <label class="field"><span>Distance (${u})</span>
+        <label class="field"><span>Your ${u === 'mi' ? 'miles' : 'km'}</span>
           <input name="dist" inputmode="decimal" value="${fmtDist(dist, u, false)}" required /></label>
         <label class="field"><span>Time <em>(optional)</em></span>
           <input name="time" inputmode="numeric" placeholder="mm:ss" value="${rec?.durationSeconds ? fmtDuration(rec.durationSeconds) : ''}" /></label>

@@ -101,21 +101,21 @@ function renderLanding(error = '') {
     <main class="wrap landing">
       <h1 class="host">@${esc(HOST_HANDLE).replace(/\./, '<wbr>.')}</h1>
       <h2 class="title">🎄 Running Advent Calendar</h2>
-      <p class="lede">24 days. 24 runs (or walks).<br/>1–5 miles on weekdays. Weekends go long.</p>
+      <p class="lede">24 days. 24 runs or walks.<br/>1–5 miles on weekdays. Weekends go long.</p>
       <form class="card join" novalidate>
         <h3>A few things to know:</h3>
         <ul class="facts">
           <li><span>🎄</span>December 1–24, a new door every midnight</li>
           <li><span>🏃</span>Weekdays: 1–5 miles, a different distance each day</li>
           <li><span>🌲</span>Saturdays &amp; Sundays are saved for long runs or walks</li>
-          <li><span>✍️</span>Log the miles you actually did. Shorter or longer still counts.</li>
+          <li><span>✍️</span>Log the miles you do. Shorter or longer… it all counts.</li>
           <li><span>⏱️</span>No pace requirements. Run, jog, walk.</li>
-          <li><span>🦋</span>Sign in with Bluesky. Your runs live in your account.</li>
-          <li><span>📸</span>Share each door to Bluesky or Instagram</li>
+          <li><span>🦋</span>Sign in with Bluesky. Your activity lives in your account.</li>
+          <li><span>📸</span>Share your activity on Bluesky or Instagram</li>
           ${stravaEnabled() ? '<li><span>🧡</span>Optional: connect Strava to import your runs</li>' : ''}
-          <li><span>👋</span>A friendly Member board, with no rankings</li>
-          <li><span>❤️</span>All welcome!</li>
+          <li><span>❤️</span>All experience levels are welcome! Let's have fun!</li>
         </ul>
+        <p class="tagline top">No medals, no pressure. Just a little daily nudge to keep moving through the holidays.</p>
         <label class="field">
           <span>Your Bluesky handle</span>
           <input name="handle" autocapitalize="none" spellcheck="false" placeholder="Start typing your name or handle" required />
@@ -131,7 +131,6 @@ function renderLanding(error = '') {
           <p>New to Bluesky? Make a free account, then come back here and join.</p>
           <a class="btn btn-ghost" href="https://bsky.app/" target="_blank" rel="noopener">Sign up for Bluesky 🦋</a>
         </div>
-        <p class="tagline">No medals, no pressure. Just a little daily nudge to keep moving through the holidays.</p>
       </form>
       ${footer()}
     </main>`
@@ -334,7 +333,7 @@ function door(day: number, size: string, today: number) {
 
 async function invite() {
   const url = location.origin + import.meta.env.BASE_URL
-  const text = `I'm doing the @${HOST_HANDLE} Running Advent Calendar: 24 days, 24 runs (or walks): 1–5 miles on weekdays, long ones on weekends. Join me! 🎄 #${HASHTAG}`
+  const text = `I'm doing the @${HOST_HANDLE} Running Advent Calendar: 24 days, 24 runs or walks: 1–5 miles on weekdays, long ones on weekends. Join me! 🎄 #${HASHTAG}`
   if (navigator.share) {
     try {
       return await navigator.share({ title: 'Running Advent Calendar', text, url })

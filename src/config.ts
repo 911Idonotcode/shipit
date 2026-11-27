@@ -2,6 +2,9 @@
 // Everything you'd want to tweak lives in this file.
 // ─────────────────────────────────────────────────────────────
 
+/** The calendar's name, used in titles, posts and invites. */
+export const APP_NAME = '24 Days of Run-Mas'
+
 /** Your Bluesky handle — shown as a small "made by" credit. */
 export const HOST_HANDLE = 'acastanedalife.bsky.social'
 

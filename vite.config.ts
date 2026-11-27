@@ -18,7 +18,7 @@ function oauthClientMetadata(): Plugin {
         source: JSON.stringify(
           {
             client_id: `${SITE_URL}client-metadata.json`,
-            client_name: 'Running Advent Calendar',
+            client_name: '24 Days of Run-Mas',
             client_uri: SITE_URL,
             redirect_uris: [SITE_URL],
             scope: 'atproto transition:generic',

@@ -1,4 +1,4 @@
-# 🎄 Running Advent Calendar
+# 24 Days of Run-Mas
 
 24 days. 24 runs or walks. 1–5 miles on weekdays. Weekends go long. Hosted by [@acastanedalife.bsky.social](https://bsky.app/profile/acastanedalife.bsky.social).
 

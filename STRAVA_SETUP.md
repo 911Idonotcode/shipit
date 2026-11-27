@@ -20,7 +20,7 @@ You'll need a computer. Do the steps in this order.
 
 1. Go to **https://www.strava.com/settings/api** (log in to Strava).
 2. Fill in:
-   - **Application Name:** Running Advent Calendar
+   - **Application Name:** 24 Days of Run-Mas
    - **Category:** the closest fit (e.g. Other)
    - **Website:** `https://911idonotcode.github.io/shipit/`
    - **Authorization Callback Domain:** your worker's domain **without** `https://`, e.g. `runadvent-strava.YOUR-NAME.workers.dev`

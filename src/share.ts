@@ -1,5 +1,5 @@
 import { RichText, type Agent } from '@atproto/api'
-import { HASHTAG } from './config'
+import { APP_NAME, HASHTAG } from './config'
 import { fmtDist, fmtDuration, fmtPace, target, toUnits } from './calendar'
 import type { DayRecord, Units } from './data'
 
@@ -145,7 +145,8 @@ export async function drawCard(canvas: HTMLCanvasElement, input: CardInput) {
   ctx.fillText(`Day ${rec.day} of 24`, bx + bs + 30, by + 66)
   ctx.fillStyle = C.muted
   ctx.font = '600 32px Figtree'
-  ctx.fillText('🎄 Running Advent Calendar', bx + bs + 30, by + 114)
+  ctx.fillText(APP_NAME, bx + bs + 30, by + 114)
+  drawWreath(ctx, bx + bs + 30 + ctx.measureText(APP_NAME).width + 42, by + 101, 19)
 
   // ── bottom block ──
   const dist = toUnits(rec.distanceMeters, units)
@@ -193,7 +194,7 @@ export async function drawCard(canvas: HTMLCanvasElement, input: CardInput) {
   // footer
   ctx.fillStyle = C.muted
   ctx.font = '600 30px Figtree'
-  ctx.fillText(input.team || (input.handle ? `@${input.handle}` : 'Running Advent Calendar'), 64, H - 62, W - 128 - 260)
+  ctx.fillText(input.team || (input.handle ? `@${input.handle}` : APP_NAME), 64, H - 62, W - 128 - 260)
   ctx.textAlign = 'right'
   ctx.fillStyle = C.gold
   ctx.fillText(`#${HASHTAG}`, W - 64, H - 62)
@@ -218,6 +219,38 @@ export async function drawCard(canvas: HTMLCanvasElement, input: CardInput) {
   ctx.restore()
 }
 
+function drawWreath(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
+  ctx.save()
+  ctx.lineWidth = r * 0.55
+  ctx.strokeStyle = '#1f7a4a'
+  ctx.beginPath()
+  ctx.arc(x, y, r, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.lineWidth = r * 0.25
+  ctx.strokeStyle = '#2fa266'
+  ctx.setLineDash([r * 0.35, r * 0.3])
+  ctx.stroke()
+  ctx.setLineDash([])
+  ctx.fillStyle = '#e5394a'
+  for (const a of [0.6, 1.9, 3.3, 4.4, 5.6]) {
+    ctx.beginPath()
+    ctx.arc(x + Math.cos(a) * r, y + Math.sin(a) * r, r * 0.16, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  const by = y + r
+  ctx.beginPath()
+  ctx.moveTo(x, by)
+  ctx.lineTo(x - r * 0.55, by - r * 0.3)
+  ctx.lineTo(x - r * 0.55, by + r * 0.3)
+  ctx.closePath()
+  ctx.moveTo(x, by)
+  ctx.lineTo(x + r * 0.55, by - r * 0.3)
+  ctx.lineTo(x + r * 0.55, by + r * 0.3)
+  ctx.closePath()
+  ctx.fill()
+  ctx.restore()
+}
+
 /** JPEG under Bluesky's 1 MB image limit. */
 export async function toJpeg(canvas: HTMLCanvasElement, maxBytes = 950_000): Promise<Blob> {
   for (const q of [0.92, 0.85, 0.78, 0.7, 0.6, 0.5]) {
@@ -239,7 +272,7 @@ export function defaultPostText(input: CardInput): string {
     parts.push(fmtPace(rec.distanceMeters, rec.durationSeconds, units))
   }
   const lines = [
-    `🎁 Day ${rec.day} of the Running Advent Calendar: done!${input.team ? ` Team ${input.team}` : ''}`,
+    `🎁 Day ${rec.day} of ${APP_NAME}: done!${input.team ? ` Team ${input.team}` : ''}`,
     `🏃 ${parts.join(' · ')}`,
   ]
   if (input.streak > 1) lines.push(`🔥 ${input.streak}-day streak`)

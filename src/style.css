@@ -261,6 +261,7 @@ h1, h2, h3, .num, .btn, .countdown b, .stats b, .target { font-family: var(--dis
 .door.s .done-badge, .door.s .catchup { font-size: 11px; padding: 2px 7px; left: 8%; top: 8%; }
 
 /* ── branding ── */
+.wreath { width: 0.95em; height: 0.95em; vertical-align: -0.12em; display: inline-block; }
 .credit { margin: 6px 0 14px; color: var(--muted); font-size: 15px; }
 .credit a { color: var(--cream); font-weight: 600; }
 .top-btns { display: flex; gap: 8px; align-items: center; }

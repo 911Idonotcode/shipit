@@ -1,5 +1,5 @@
 import './style.css'
-import { ADMIN_HANDLES, HASHTAG, HOST_HANDLE, LAYOUT, YEAR } from './config'
+import { ADMIN_HANDLES, APP_NAME, HASHTAG, HOST_HANDLE, LAYOUT, YEAR } from './config'
 import { initSession, signIn, signOut, type Session } from './auth'
 import {
   createTeam, deleteAll, deleteDay, getProfile, listDays, saveDay, saveProfile, teamCode, teamUri,
@@ -18,6 +18,13 @@ const app = document.querySelector<HTMLDivElement>('#app')!
 const TERMS_KEY = 'runadvent:accepted-terms'
 const INVITE_KEY = 'runadvent:pending-invite'
 const TEAM_KEY = 'runadvent:selected-team'
+/** Little wreath (Unicode has no wreath emoji). */
+const WREATH = `<svg class="wreath" viewBox="0 0 64 64" aria-hidden="true">
+  <circle cx="32" cy="30" r="20" fill="none" stroke="#1f7a4a" stroke-width="11"/>
+  <circle cx="32" cy="30" r="20" fill="none" stroke="#2fa266" stroke-width="5" stroke-dasharray="7 6"/>
+  <g fill="#e5394a"><circle cx="16" cy="22" r="3.2"/><circle cx="46" cy="18" r="3.2"/><circle cx="49" cy="38" r="3.2"/><circle cx="20" cy="42" r="3.2"/><circle cx="33" cy="11" r="3"/></g>
+  <path d="M32 50 l-11 -6 v12 z M32 50 l11 -6 v12 z" fill="#e5394a"/><circle cx="32" cy="50" r="4" fill="#c42a3a"/>
+</svg>`
 const isDemo = import.meta.env.DEV && new URLSearchParams(location.search).has('demo')
 
 let session: Session | null = null
@@ -105,7 +112,7 @@ function renderLanding(error = '') {
   app.innerHTML = `
     ${lights()}
     <main class="wrap landing">
-      <h1 class="host">🎄 Running Advent Calendar</h1>
+      <h1 class="host">${APP_NAME} ${WREATH}</h1>
       <p class="credit">made by <a href="https://bsky.app/profile/${esc(HOST_HANDLE)}" target="_blank" rel="noopener">@${esc(HOST_HANDLE)}</a></p>
       <p class="lede">24 days. 24 runs or walks.<br/>1–5 miles on weekdays. Weekends go long.</p>
       <div class="invite-banner" hidden></div>
@@ -234,7 +241,7 @@ function renderApp() {
     ${lights()}
     <main class="wrap">
       <header class="top">
-        <span class="handle">🎄 Running Advent Calendar</span>
+        <span class="handle">${APP_NAME} ${WREATH}</span>
         <span class="top-btns">
           ${isAdmin() ? '<button class="admin-btn">Admin</button>' : ''}
           <button class="gear" aria-label="Settings">⚙️</button>
@@ -362,10 +369,10 @@ async function invite() {
   const t = currentTeam()
   if (t) return inviteToTeam(t)
   const url = siteUrl()
-  const text = `I'm doing the Running Advent Calendar: 24 days, 24 runs or walks, 1–5 miles on weekdays and long ones on weekends. Join me! 🎄 #${HASHTAG}`
+  const text = `I'm doing ${APP_NAME}: 24 runs or walks, 1–5 miles on weekdays and long ones on weekends. Join me! 🎄 #${HASHTAG}`
   if (navigator.share) {
     try {
-      return await navigator.share({ title: 'Running Advent Calendar', text, url })
+      return await navigator.share({ title: APP_NAME, text, url })
     } catch (e) {
       if ((e as Error).name === 'AbortError') return
     }
@@ -546,7 +553,7 @@ async function setTeams(teams: string[]) {
 function inviteToTeam(uri: string, justCreated = false) {
   const link = `${siteUrl()}?team=${encodeURIComponent(teamCode(uri))}`
   const label = teamLabel(uri)
-  const text = `Join my team ${label} in the Running Advent Calendar! 24 days, 24 runs or walks. 🎄 #${HASHTAG}`
+  const text = `Join my team ${label} in ${APP_NAME}! 24 runs or walks. 🎄 #${HASHTAG}`
   openSheet(`
     ${justCreated ? `<p class="eyebrow">Team created 🎉</p>` : ''}
     <h2>Invite to ${esc(label)}</h2>
@@ -919,7 +926,7 @@ function openShare(day: number, justOpened = false) {
         const u = input.units
         const parts = [`Day ${day} of 24`, fmtDist(toUnits(rec.distanceMeters, u), u)]
         if (rec.durationSeconds) parts.push(`time ${fmtDuration(rec.durationSeconds)}`, `pace ${fmtPace(rec.distanceMeters, rec.durationSeconds, u)}`)
-        return `${input.photo ? 'Run photo with' : 'Running Advent Calendar card with'} stats: ${parts.join(', ')}.`
+        return `${input.photo ? 'Run photo with' : `${APP_NAME} card with`} stats: ${parts.join(', ')}.`
       }
 
       $<HTMLButtonElement>('[data-bsky]', el).addEventListener('click', (e) => {
@@ -1011,7 +1018,7 @@ function openSettings() {
         location.reload()
       })
       $<HTMLButtonElement>('[data-delete]', el).addEventListener('click', (e) => {
-        if (!confirm('Delete all your Running Advent Calendar data from your Bluesky account? Posts you shared stay until you delete them in Bluesky. This can’t be undone.')) return
+        if (!confirm(`Delete all your ${APP_NAME} data from your Bluesky account? Posts you shared stay until you delete them in Bluesky. This can’t be undone.`)) return
         busy(e.currentTarget as HTMLButtonElement, 'Deleting…', async () => {
           await deleteAll(session!.agent, session!.did)
           if (stravaConnected()) await disconnectStrava()

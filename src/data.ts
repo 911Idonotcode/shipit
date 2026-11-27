@@ -6,6 +6,8 @@ export type Units = 'mi' | 'km'
 export interface Profile {
   name: string
   units: Units
+  /** Listed on the Member board (default: yes). */
+  showOnBoard?: boolean
   /** User ticked the "own risk / health disclaimer" box. */
   acceptedTerms: boolean
   createdAt: string
@@ -19,6 +21,8 @@ export interface DayRecord {
   /** Optional moving time. */
   durationSeconds?: number
   note?: string
+  /** Strava activity this was imported from, if any. */
+  stravaActivityId?: number
   /** URI of the Bluesky post, if the runner shared it. */
   postUri?: string
   completedAt: string

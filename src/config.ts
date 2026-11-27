@@ -21,14 +21,14 @@ export const SCHEDULE: { day: number; miles: number; title: string }[] = [
   { day: 2, miles: 2, title: 'Cocoa cruise' },
   { day: 3, miles: 1.5, title: 'Twinkle trot' },
   { day: 4, miles: 3, title: 'Sweater weather' },
-  { day: 5, miles: 5, title: 'Gingerbread long run' },
-  { day: 6, miles: 4, title: 'Sunday long walk' },
+  { day: 5, miles: 5, title: 'Gingerbread long haul' },
+  { day: 6, miles: 4, title: 'Lazy Sunday long one' },
   { day: 7, miles: 1, title: 'Easy elf miles' },
   { day: 8, miles: 2.5, title: 'Peppermint pace' },
   { day: 9, miles: 3, title: 'Frosty fartlek' },
   { day: 10, miles: 1.5, title: 'Mitten mile-and-a-half' },
   { day: 11, miles: 4, title: 'Friday night lights' },
-  { day: 12, miles: 6, title: 'Lights tour long run' },
+  { day: 12, miles: 6, title: 'Lights tour' },
   { day: 13, miles: 5, title: 'Sunday snow globe loop' },
   { day: 14, miles: 1, title: 'Recovery jingle' },
   { day: 15, miles: 3, title: 'Tinsel tempo' },
@@ -36,7 +36,7 @@ export const SCHEDULE: { day: number; miles: number; title: string }[] = [
   { day: 17, miles: 3.5, title: 'Reindeer games' },
   { day: 18, miles: 1.5, title: 'Wrap-it-up walk' },
   { day: 19, miles: 7, title: 'The big one' },
-  { day: 20, miles: 6, title: 'Longest night long run' },
+  { day: 20, miles: 6, title: 'Longest night long one' },
   { day: 21, miles: 2, title: 'Solstice shakeout' },
   { day: 22, miles: 3, title: 'Last-minute shopping run' },
   { day: 23, miles: 1, title: 'Christmas Eve Eve' },
@@ -63,3 +63,9 @@ export const COLLECTION_DAY = `${NS}.day`
 export const COLLECTION_PROFILE = `${NS}.profile`
 
 export const MI_TO_KM = 1.609344
+
+/**
+ * Strava import: the address of your Cloudflare worker (see STRAVA_SETUP.md),
+ * e.g. 'https://runadvent-strava.yourname.workers.dev'. Leave '' to hide Strava.
+ */
+export const STRAVA_WORKER_URL = ''

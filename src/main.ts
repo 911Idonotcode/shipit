@@ -6,6 +6,9 @@ import {
   currentDay, doorOpensAt, doorState, fmtDist, fmtDuration, fmtPace, metersFrom, milesToUnits, now,
   parseDuration, stats, target, toUnits,
 } from './calendar'
+import { activitiesOn, connectStrava, disconnectStrava, handleStravaReturn, stravaAthlete, stravaConnected, stravaEnabled, type Activity } from './strava'
+import { attachHandleTypeahead } from './typeahead'
+import { loadMembers, type Member } from './members'
 import { defaultPostText, drawCard, graphemeLength, loadPhoto, postToBluesky, postUrl, shareImage, toJpeg, type CardInput } from './share'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
@@ -109,11 +112,13 @@ function renderLanding(error = '') {
           <li><span>⏱️</span>No pace requirements. Run, jog, walk.</li>
           <li><span>🦋</span>Sign in with Bluesky. Your runs live in your account.</li>
           <li><span>📸</span>Share each door to Bluesky or Instagram</li>
+          ${stravaEnabled() ? '<li><span>🧡</span>Optional: connect Strava to import your runs</li>' : ''}
+          <li><span>👋</span>A friendly Member board, with no rankings</li>
           <li><span>❤️</span>All welcome!</li>
         </ul>
         <label class="field">
           <span>Your Bluesky handle</span>
-          <input name="handle" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="yourname.bsky.social" required />
+          <input name="handle" autocapitalize="none" spellcheck="false" placeholder="Start typing your name or handle" required />
         </label>
         <label class="check">
           <input type="checkbox" name="terms" ${localStorage.getItem(TERMS_KEY) ? 'checked' : ''} />
@@ -122,12 +127,26 @@ function renderLanding(error = '') {
         ${error ? `<p class="error">${esc(error)}</p>` : ''}
         <button class="btn btn-red" type="submit">Join with Bluesky 🦋</button>
         <p class="small center">Already joined? Same button. Just sign in again.</p>
+        <div class="new-bsky">
+          <p>New to Bluesky? Make a free account, then come back here and join.</p>
+          <a class="btn btn-ghost" href="https://bsky.app/" target="_blank" rel="noopener">Sign up for Bluesky 🦋</a>
+        </div>
         <p class="tagline">No medals, no pressure. Just a little daily nudge to keep moving through the holidays.</p>
       </form>
       ${footer()}
     </main>`
 
   const form = $<HTMLFormElement>('form.join')
+  attachHandleTypeahead(
+    form.elements.namedItem('handle') as HTMLInputElement,
+    import.meta.env.DEV && new URLSearchParams(location.search).has('demo-search')
+      ? async (q) => [
+          { did: 'did:plc:1', handle: 'acastanedalife.bsky.social', displayName: 'Andres Castañeda' },
+          { did: 'did:plc:2', handle: 'andrea-runs.bsky.social', displayName: 'Andrea 🏃‍♀️' },
+          { did: 'did:plc:3', handle: 'andy.bsky.social' },
+        ].filter((a) => (a.handle + (a.displayName ?? '')).toLowerCase().includes(q.toLowerCase().slice(0, 2)))
+      : undefined,
+  )
   form.addEventListener('submit', async (e) => {
     e.preventDefault()
     const handle = (form.elements.namedItem('handle') as HTMLInputElement).value.trim()
@@ -172,7 +191,10 @@ function openInfo() {
       <p>This is a just-for-fun challenge, not medical or coaching advice. Check with a doctor before starting any new exercise, go at your own pace, walk whenever you like, and skip a day if something hurts. You take part at your own risk.</p>
       <h4>Where your data lives</h4>
       <p>There's no separate database. When you open a door, the calendar saves a small record (day, distance, optional time and note) <strong>in your own Bluesky account</strong>, the same place your posts live. Like posts, these records are public on the AT Protocol network.</p>
+      <p><strong>Member board:</strong> everyone taking part can see your name, Bluesky handle, days completed, streak and total distance. You can hide yourself anytime in Settings.</p>
       <p>Photos stay on your device. One only leaves it if you choose <em>Post to Bluesky</em> or share it yourself.</p>
+      ${stravaEnabled() ? `<h4>Strava (optional)</h4>
+      <p>If you connect Strava, the calendar only <em>reads</em> your runs and walks for the door you're opening, and only when you tap <em>Import from Strava</em>. Your Strava login stays on this device. You can disconnect anytime in Settings.</p>` : ''}
       <p><em>Delete my data</em> in Settings removes every calendar record from your account. Posts you've shared stay until you delete them in Bluesky.</p>
     </div>`)
 }
@@ -207,6 +229,11 @@ function renderApp() {
       <button class="btn btn-green invite"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z"/></svg> Invite a friend</button>
       <h2 class="section">${today === 0 ? 'Preview' : 'Your doors'}</h2>
       <div class="grid">${LAYOUT.map(([d, size]) => door(d, size, today)).join('')}</div>
+      <section class="board" aria-labelledby="board-h">
+        <h2 class="section" id="board-h">Member board</h2>
+        <p class="board-sub">Everyone who's joined. No rankings, just cheering each other on. 💛</p>
+        <div class="board-list"><div class="board-loading"><span class="spinner"></span> Gathering the crew…</div></div>
+      </section>
       ${footer()}
     </main>`
 
@@ -218,6 +245,7 @@ function renderApp() {
   document.querySelector('[data-open-today]')?.addEventListener('click', () => openDoor(today))
   document.querySelector('[data-share-today]')?.addEventListener('click', () => openShare(today))
   bindCommon()
+  renderBoard()
 
   clearInterval(tick)
   tick = window.setInterval(() => {
@@ -317,6 +345,71 @@ async function invite() {
   open(`https://bsky.app/intent/compose?text=${encodeURIComponent(`${text}\n${url}`)}`, '_blank')
 }
 
+// ── member board ──
+let members: Member[] | null = null
+let membersAt = 0
+let membersLoading = false
+let membersError = false
+
+function selfMember(): Member | null {
+  if (profile?.showOnBoard === false || !session) return null
+  const s = stats(days)
+  const prev = members?.find((m) => m.isYou)
+  return { did: session.did, handle: myHandle || prev?.handle || '', name: profile?.name || 'You', avatar: prev?.avatar, doors: s.doors, streak: s.streak, meters: s.meters, isYou: true }
+}
+
+async function renderBoard() {
+  const box = document.querySelector<HTMLElement>('.board-list')
+  if (!box) return
+  if (members) box.innerHTML = boardHtml()
+  if (membersLoading || (members && Date.now() - membersAt < 120_000)) return
+  membersLoading = true
+  try {
+    members =
+      import.meta.env.DEV && new URLSearchParams(location.search).has('demo')
+        ? (await import('./demo')).demoMembers(session!.did)
+        : await loadMembers({ did: session!.did, profile: profile!, days })
+    membersError = false
+  } catch (e) {
+    console.error('member board', e)
+    membersError = true
+    members ??= []
+  } finally {
+    membersAt = Date.now()
+    membersLoading = false
+  }
+  const fresh = document.querySelector<HTMLElement>('.board-list')
+  if (fresh) fresh.innerHTML = boardHtml()
+}
+
+function boardHtml() {
+  const u = units()
+  const me = selfMember()
+  const list = [...(me ? [me] : []), ...(members ?? []).filter((m) => !m.isYou)]
+  const count = list.length
+  const rows = list
+    .map((m) => {
+      const onStreak = m.streak >= 2
+      const initial = esc((m.name.trim()[0] || '?').toUpperCase())
+      return `<li class="member${m.isYou ? ' you' : ''}">
+        ${m.avatar ? `<img class="av" src="${esc(m.avatar)}" alt="" loading="lazy" />` : `<span class="av">${initial}</span>`}
+        <span class="who">
+          <b>${esc(m.name)}${m.isYou ? ' <em>(you)</em>' : ''}</b>
+          ${m.handle ? `<a href="https://bsky.app/profile/${esc(m.handle)}" target="_blank" rel="noopener">@${esc(m.handle)}</a>` : ''}
+        </span>
+        <span class="c streak" title="${onStreak ? `${m.streak}-day streak` : 'Not on a streak right now'}">${onStreak ? '<i class="tick" aria-label="On a streak">✓</i>' : '<span class="sr">No streak</span>'}</span>
+        <span class="c"><b>${m.doors}</b></span>
+        <span class="c"><b>${fmtDist(Math.round(toUnits(m.meters, u) * 10) / 10, u, false)}</b></span>
+      </li>`
+    })
+    .join('')
+  return `
+    <div class="board-head"><span>${count} ${count === 1 ? 'runner' : 'runners'}</span><span class="c">Streak</span><span class="c">Days</span><span class="c">${u === 'mi' ? 'Miles' : 'Km'}</span></div>
+    <ul>${rows || '<li class="member empty">Be the first to join!</li>'}</ul>
+    <p class="small board-note">✓ = on a streak (2+ days in a row)${membersError ? ' · Couldn’t reach everyone right now. Showing what we could.' : ''}</p>
+    ${profile?.showOnBoard === false ? '<p class="small board-note">You’re hidden from the board. Change it in Settings ⚙️</p>' : ''}`
+}
+
 // ── door sheet ──
 function openDoor(day: number) {
   const today = currentDay()
@@ -372,11 +465,14 @@ function openLog(day: number) {
   openSheet(`
     <p class="eyebrow">Day ${day} · ${monthDay(day)}${kind(day)}${day < currentDay() ? ' · catching up' : ''}</p>
     <h2>${esc(t.title)}</h2>
-    <p class="target-chip">Suggested distance: <b>${fmtDist(milesToUnits(t.miles, u), u)}</b></p>
-    <p class="small">Enter the distance you actually covered. Any amount counts.</p>
+    <p class="target-chip">Suggested: <b>${fmtDist(milesToUnits(t.miles, u), u)}</b>${isWeekend(day) ? ' · run or walk' : ''}</p>
+    <p class="small">We've filled in the suggestion. Did more or less? Just change it. It's all good. 💛</p>
+    ${stravaEnabled() ? (stravaConnected()
+      ? `<button class="btn btn-strava" type="button" data-import>Import from Strava</button><div class="strava-list" hidden></div>`
+      : `<button class="link strava-link" type="button" data-connect>Connect Strava to import your runs</button>`) : ''}
     <form class="log" novalidate>
       <div class="row">
-        <label class="field"><span>Distance (${u})</span>
+        <label class="field"><span>Your ${u === 'mi' ? 'miles' : 'km'}</span>
           <input name="dist" inputmode="decimal" value="${fmtDist(dist, u, false)}" required /></label>
         <label class="field"><span>Time <em>(optional)</em></span>
           <input name="time" inputmode="numeric" placeholder="mm:ss" value="${rec?.durationSeconds ? fmtDuration(rec.durationSeconds) : ''}" /></label>
@@ -388,6 +484,44 @@ function openLog(day: number) {
     </form>`,
     (el) => {
       const form = $<HTMLFormElement>('form', el)
+      let stravaId = rec?.stravaActivityId
+      el.querySelector('[data-connect]')?.addEventListener('click', connectStrava)
+      el.querySelector<HTMLButtonElement>('[data-import]')?.addEventListener('click', (e) =>
+        busy(e.currentTarget as HTMLButtonElement, 'Checking Strava…', async () => {
+          const list = $('.strava-list', el)
+          const acts = await activitiesOn(day)
+          list.hidden = false
+          if (!acts.length) {
+            list.innerHTML = `<p class="small">No runs or walks on Strava for ${monthDay(day)} yet. You can still type the distance below.</p>`
+            return
+          }
+          const fill = (a: { distance: number; moving_time: number; name: string; id?: number }) => {
+            ;(form.elements.namedItem('dist') as HTMLInputElement).value = fmtDist(toUnits(a.distance, u), u, false)
+            ;(form.elements.namedItem('time') as HTMLInputElement).value = fmtDuration(a.moving_time)
+            const note = form.elements.namedItem('note') as HTMLInputElement
+            if (!note.value) note.value = a.name.slice(0, 140)
+            stravaId = a.id
+            list.innerHTML = `<p class="small">✓ Filled in from Strava. Check it and tap the button below.</p>`
+          }
+          list.innerHTML =
+            acts.map((a, i) => `<button type="button" class="strava-act" data-i="${i}">
+              <b>${esc(a.name)}</b>
+              <span>${esc(a.type)} · ${fmtDist(toUnits(a.distance, u), u)} · ${fmtDuration(a.moving_time)}</span>
+            </button>`).join('') +
+            (acts.length > 1 ? `<button type="button" class="link" data-all>Add them all together</button>` : '') +
+            `<p class="powered">Activity data from Strava</p>`
+          list.querySelectorAll<HTMLElement>('.strava-act').forEach((b) =>
+            b.addEventListener('click', () => fill(acts[Number(b.dataset.i)])),
+          )
+          list.querySelector('[data-all]')?.addEventListener('click', () =>
+            fill({
+              distance: acts.reduce((n: number, a: Activity) => n + a.distance, 0),
+              moving_time: acts.reduce((n: number, a: Activity) => n + a.moving_time, 0),
+              name: acts.map((a) => a.name).join(' + '),
+            }),
+          )
+        }),
+      )
       form.addEventListener('submit', async (e) => {
         e.preventDefault()
         const fd = new FormData(form)
@@ -403,6 +537,7 @@ function openLog(day: number) {
           ...(dur ? { durationSeconds: dur } : {}),
           ...(String(fd.get('note') ?? '').trim() ? { note: String(fd.get('note')).trim() } : {}),
           ...(rec?.postUri ? { postUri: rec.postUri } : {}),
+          ...(stravaId ? { stravaActivityId: stravaId } : {}),
           completedAt: rec?.completedAt ?? new Date().toISOString(),
         }
         await busy($<HTMLButtonElement>('button[type=submit]', form), 'Saving…', async () => {
@@ -531,7 +666,19 @@ function openSettings() {
           <label><input type="radio" name="units" value="km" ${u === 'km' ? 'checked' : ''}/><span>Km</span></label>
         </div>
       </div>
+      <label class="check board-toggle">
+        <input type="checkbox" name="board" ${profile?.showOnBoard === false ? '' : 'checked'} />
+        <span>Show me on the Member board<br/><small>Others see your name, days completed, streak and distance.</small></span>
+      </label>
       <button class="btn btn-green" type="submit">Save</button>
+      ${stravaEnabled() ? `<div class="strava-box">
+        <span>Strava</span>
+        ${stravaConnected()
+          ? `<p class="small">Connected${stravaAthlete() ? ' as ' + esc(stravaAthlete()!) : ''} on this device.</p>
+             <button class="btn btn-ghost" type="button" data-strava-off>Disconnect Strava</button>`
+          : `<p class="small">Import your runs and walks instead of typing them.</p>
+             <button class="btn btn-strava" type="button" data-strava-on>Connect with Strava</button>`}
+      </div>` : ''}
       <button class="btn btn-ghost" type="button" data-signout>Sign out</button>
       <button class="btn btn-ghost danger" type="button" data-delete>Delete my data</button>
       <p class="small center">Signed in as ${esc(myHandle ? '@' + myHandle : session!.did)}</p>
@@ -545,6 +692,7 @@ function openSettings() {
           ...profile!,
           name: String(fd.get('name') ?? '').trim() || profile!.name,
           units: (fd.get('units') as Units) ?? 'mi',
+          showOnBoard: fd.get('board') === 'on',
         }
         busy($<HTMLButtonElement>('button[type=submit]', form), 'Saving…', async () => {
           await saveProfile(session!.agent, session!.did, next)
@@ -554,6 +702,14 @@ function openSettings() {
           toast('Saved ✨')
         })
       })
+      el.querySelector('[data-strava-on]')?.addEventListener('click', connectStrava)
+      el.querySelector<HTMLButtonElement>('[data-strava-off]')?.addEventListener('click', (e) =>
+        busy(e.currentTarget as HTMLButtonElement, 'Disconnecting…', async () => {
+          await disconnectStrava()
+          openSettings()
+          toast('Strava disconnected')
+        }),
+      )
       $('[data-signout]', el).addEventListener('click', async () => {
         await signOut(session!)
         location.reload()
@@ -562,6 +718,7 @@ function openSettings() {
         if (!confirm('Delete all your Running Advent Calendar data from your Bluesky account? Posts you shared stay until you delete them in Bluesky. This can’t be undone.')) return
         busy(e.currentTarget as HTMLButtonElement, 'Deleting…', async () => {
           await deleteAll(session!.agent, session!.did)
+          if (stravaConnected()) await disconnectStrava()
           localStorage.removeItem(TERMS_KEY)
           await signOut(session!)
           alert('Your calendar data was deleted.')
@@ -575,6 +732,8 @@ function openSettings() {
 async function boot() {
   ambience()
   app.innerHTML = `${lights()}<main class="wrap loading"><div class="spinner big"></div></main>`
+  const stravaResult = handleStravaReturn() // must run before Bluesky sign-in reads the URL
+  if (stravaResult) setTimeout(() => toast(stravaResult.msg, stravaResult.ok ? 'ok' : 'err'), 600)
   try {
     session =
       import.meta.env.DEV && new URLSearchParams(location.search).has('demo')

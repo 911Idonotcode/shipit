@@ -36,3 +36,19 @@ export function demoSession(): Session {
   }
   return { did: 'did:plc:demo', agent: agent as any, oauth: { signOut: async () => {} } as any }
 }
+
+export function demoMembers(selfDid: string) {
+  const names = ['Priya N.', 'Marcus Lee', 'Jo', 'Sam Okafor', 'Lena Fischer', 'Dev Patel', 'Rosa M.', 'Tomás Ruiz', 'Kai', 'Bea Thompson']
+  return [
+    { did: selfDid, handle: 'acastanedalife.bsky.social', name: 'Andres Castañeda', doors: 0, streak: 0, meters: 0, isYou: true },
+    ...names.map((name, i) => ({
+      did: `did:plc:demo${i}`,
+      handle: `${name.split(' ')[0].toLowerCase().replace(/[^a-z]/g, '')}.bsky.social`,
+      name,
+      doors: (i * 7) % 11,
+      streak: [5, 0, 2, 1, 8, 0, 3, 0, 2, 0][i],
+      meters: ((i * 7) % 11) * 4200,
+      isYou: false,
+    })),
+  ].sort((a, b) => Number(b.isYou) - Number(a.isYou) || a.name.localeCompare(b.name))
+}

@@ -130,7 +130,7 @@ function renderLanding(error = '') {
       <p class="subtitle">A Movement Advent Calendar</p>
       <p class="credit">made by <a href="https://bsky.app/profile/${esc(HOST_HANDLE)}" target="_blank" rel="noopener">@${esc(HOST_HANDLE)}</a></p>
       <p class="lede">24 days. 24 runs or walks.<br/>Two plans: Easy going or Intermediate.</p>
-      <button class="btn btn-ghost preview-btn" type="button" data-preview>👀 Preview an open door</button>
+      <button class="btn btn-ghost preview-btn" type="button" data-preview>👀 Preview Day</button>
       <div class="invite-banner" hidden></div>
       <form class="card join" novalidate>
         <h3>A few things to know:</h3>
@@ -275,7 +275,7 @@ function renderApp() {
         <div><b>${fmtDist(toUnits(s.meters, u), u, false)}<small>${u}</small></b><span>Total ${u === 'mi' ? 'miles' : 'km'}</span></div>
       </section>` : ''}
       <button class="btn btn-green invite">${SEND_ICON} ${currentTeam() ? `Invite to ${esc(teamLabel(currentTeam()!))}` : 'Invite a friend'}</button>
-      <div class="section-row"><h2 class="section">${today === 0 ? 'Preview' : 'Your doors'}</h2><button class="link preview-link" type="button" data-preview>👀 Example door</button></div>
+      <div class="section-row"><h2 class="section">${today === 0 ? 'Preview' : 'Your doors'}</h2><button class="link preview-link" type="button" data-preview>👀 Preview Day</button></div>
       <div class="grid">${LAYOUT.map(([d, size]) => door(d, size, today)).join('')}</div>
       <section class="board" aria-labelledby="board-h">
         <h2 class="section" id="board-h">${myTeams().length > 1 ? 'Your teams' : myTeams().length ? 'Your team' : 'Teams'}</h2>
@@ -311,7 +311,7 @@ function hero(today: number) {
       <p class="center">The first door opens in</p>
       ${countdownBoxes(true)}
       <p class="center small">December 1 at midnight, your time.</p>
-      <button class="btn btn-ghost preview-btn" type="button" data-preview>👀 Preview an open door</button>
+      <button class="btn btn-ghost preview-btn" type="button" data-preview>👀 Preview Day</button>
     </section>`
   }
   if (today > 24) {

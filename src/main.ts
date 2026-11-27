@@ -124,6 +124,10 @@ function renderLanding(error = '') {
         ${error ? `<p class="error">${esc(error)}</p>` : ''}
         <button class="btn btn-red" type="submit">Join with Bluesky 🦋</button>
         <p class="small center">Already joined? Same button. Just sign in again.</p>
+        <div class="new-bsky">
+          <p>New to Bluesky? Make a free account, then come back here and join.</p>
+          <a class="btn btn-ghost" href="https://bsky.app/" target="_blank" rel="noopener">Sign up for Bluesky 🦋</a>
+        </div>
         <p class="tagline">No medals, no pressure. Just a little daily nudge to keep moving through the holidays.</p>
       </form>
       ${footer()}

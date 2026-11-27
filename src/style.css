@@ -89,6 +89,9 @@ h1, h2, h3, .num, .btn, .countdown b, .stats b, .target { font-family: var(--dis
 .facts { list-style: none; padding: 0; margin: 0 0 18px; display: grid; gap: 8px; }
 .facts li { display: flex; gap: 12px; align-items: baseline; color: var(--muted); }
 .facts span { width: 26px; text-align: center; flex: none; }
+.new-bsky { margin-top: 18px; padding-top: 18px; border-top: 1px dashed var(--line); text-align: center; }
+.new-bsky p { margin: 0 0 12px; color: var(--muted); font-size: 15px; }
+.new-bsky .btn { margin: 0; }
 .tagline { text-align: center; color: var(--muted); margin: 18px 4px 0; }
 
 .stripe { overflow: hidden; padding-top: 34px; }

@@ -2,8 +2,8 @@ import './style.css'
 import { ADMIN_HANDLES, APP_NAME, HASHTAG, HOST_HANDLE, LAYOUT, YEAR } from './config'
 import { initSession, signIn, signOut, type Session } from './auth'
 import {
-  createTeam, deleteAll, deleteDay, getProfile, listDays, saveDay, saveProfile, teamCode, teamUri,
-  type DayRecord, type Profile, type Team, type Units,
+  createTeam, deleteAll, deleteDay, effectiveTeams, emptyRoster, getProfile, isRemoved, listDays, rosterSet, saveDay,
+  saveProfile, saveRoster, teamCode, teamUri, type DayRecord, type Profile, type Roster, type Team, type Units,
 } from './data'
 import {
   currentDay, doorOpensAt, doorState, fmtDist, fmtDuration, fmtPace, metersFrom, milesToUnits, now,
@@ -11,7 +11,7 @@ import {
 } from './calendar'
 import { activitiesOn, connectStrava, disconnectStrava, handleStravaReturn, stravaAthlete, stravaConnected, stravaEnabled, type Activity } from './strava'
 import { attachHandleTypeahead } from './typeahead'
-import { loadEveryone, loadMembers, loadTeam, type Member } from './members'
+import { loadEveryone, loadMembers, loadRoster, loadTeam, type Member } from './members'
 import { defaultPostText, drawCard, graphemeLength, loadPhoto, postToBluesky, postUrl, shareImage, toJpeg, type CardInput } from './share'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
@@ -31,6 +31,9 @@ let session: Session | null = null
 let profile: Profile | null = null
 let days = new Map<number, DayRecord>()
 let myHandle = ''
+let roster: Roster = emptyRoster()
+/** Teams I'm on, after the organizer's adds/removes. */
+const myTeams = () => (session ? effectiveTeams(session.did, profile, roster) : [])
 
 // ── helpers ──
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
@@ -216,7 +219,7 @@ function openInfo() {
       <p>This is a just-for-fun challenge, not medical or coaching advice. Check with a doctor before starting any new exercise, go at your own pace, walk whenever you like, and skip a day if something hurts. You take part at your own risk.</p>
       <h4>Where your data lives</h4>
       <p>There's no separate database. When you open a door, the calendar saves a small record (day, distance, optional time and note) <strong>in your own Bluesky account</strong>, the same place your posts live. Like posts, these records are public on the AT Protocol network.</p>
-      <p><strong>Teams:</strong> if you join or start a team, your teammates can see your name, Bluesky handle, days completed, streak and total distance. Running solo, you don't appear on anyone's board. Anyone with a team's invite link can join that team. You can leave a team, or hide yourself from team boards, anytime.</p>
+      <p><strong>Teams:</strong> if you join or start a team, your teammates can see your name, Bluesky handle, days completed, streak and total distance. Running solo, you don't appear on anyone's board. Anyone with a team's invite link can join that team. You can leave a team, or hide yourself from team boards, anytime. The organizer can also add people to teams or remove them.</p>
       <p><strong>Organizer overview:</strong> the calendar's creator (@${esc(HOST_HANDLE)}) can see a summary of all participants: names, handles, teams, days completed and distance.</p>
       <p>Photos stay on your device. One only leaves it if you choose <em>Post to Bluesky</em> or share it yourself.</p>
       ${stravaEnabled() ? `<h4>Strava (optional)</h4>
@@ -259,7 +262,7 @@ function renderApp() {
       <h2 class="section">${today === 0 ? 'Preview' : 'Your doors'}</h2>
       <div class="grid">${LAYOUT.map(([d, size]) => door(d, size, today)).join('')}</div>
       <section class="board" aria-labelledby="board-h">
-        <h2 class="section" id="board-h">${(profile?.teams ?? []).length > 1 ? 'Your teams' : (profile?.teams ?? []).length ? 'Your team' : 'Teams'}</h2>
+        <h2 class="section" id="board-h">${myTeams().length > 1 ? 'Your teams' : myTeams().length ? 'Your team' : 'Teams'}</h2>
         <div class="team-area"></div>
       </section>
       ${footer()}
@@ -393,7 +396,7 @@ const teamLabel = (uri: string) => {
 }
 
 function currentTeam(): string | null {
-  const teams = profile?.teams ?? []
+  const teams = myTeams()
   if (!teams.length) return null
   const saved = localStorage.getItem(TEAM_KEY)
   return saved && teams.includes(saved) ? saved : teams[0]
@@ -418,14 +421,14 @@ function selfMember(): Member | null {
   const prev = members?.find((m) => m.isYou)
   return {
     did: session.did, handle: myHandle || prev?.handle || '', name: profile?.name || 'You', avatar: prev?.avatar,
-    doors: s.doors, streak: s.streak, meters: s.meters, isYou: true, teams: profile?.teams ?? [],
+    doors: s.doors, streak: s.streak, meters: s.meters, isYou: true, teams: myTeams(),
   }
 }
 
 async function renderTeams() {
   const area = document.querySelector<HTMLElement>('.team-area')
   if (!area) return
-  const teams = profile?.teams ?? []
+  const teams = myTeams()
   if (!teams.length) {
     area.innerHTML = `<div class="card solo">
       <p class="big-emoji">🏃</p>
@@ -464,8 +467,8 @@ async function renderTeams() {
   membersLoading = true
   try {
     members = isDemo
-      ? (await import('./demo')).demoMembers(session!.did, profile!.teams ?? [])
-      : await loadMembers({ did: session!.did, profile: profile!, days })
+      ? await demoBoard()
+      : await loadMembers({ did: session!.did, profile: profile!, days }, roster)
     membersError = false
   } catch (e) {
     console.error('team board', e)
@@ -533,7 +536,7 @@ function openNewTeam() {
         busy($<HTMLButtonElement>('button[type=submit]', form), 'Creating…', async () => {
           const uri = await createTeam(session!.agent, session!.did, team)
           teamInfo.set(uri, team)
-          await setTeams([...(profile!.teams ?? []), uri])
+          await setMembership(uri, true)
           localStorage.setItem(TEAM_KEY, uri)
           renderApp()
           inviteToTeam(uri, true)
@@ -542,8 +545,15 @@ function openNewTeam() {
     })
 }
 
-async function setTeams(teams: string[]) {
-  const next: Profile = { ...profile!, teams: [...new Set(teams)] }
+/** Join (true) or leave (false) a team, in my own profile record. */
+async function setMembership(uri: string, join: boolean) {
+  const teams = profile!.teams ?? []
+  const left = profile!.leftTeams ?? []
+  const next: Profile = {
+    ...profile!,
+    teams: join ? [...new Set([...teams, uri])] : teams.filter((t) => t !== uri),
+    leftTeams: join ? left.filter((t) => t !== uri) : [...new Set([...left, uri])],
+  }
   await saveProfile(session!.agent, session!.did, next)
   profile = next
   members = null // reload boards with the new team list
@@ -585,7 +595,7 @@ function inviteToTeam(uri: string, justCreated = false) {
 async function leaveTeam(uri: string, btn: HTMLButtonElement) {
   if (!confirm(`Leave ${teamLabel(uri)}? You can rejoin anytime with the invite link.`)) return
   await busy(btn, 'Leaving…', async () => {
-    await setTeams((profile!.teams ?? []).filter((t) => t !== uri))
+    await setMembership(uri, false)
     if (localStorage.getItem(TEAM_KEY) === uri) localStorage.removeItem(TEAM_KEY)
     renderApp()
     toast('You left the team')
@@ -608,7 +618,13 @@ async function maybeAcceptInvite() {
   const uri = localStorage.getItem(INVITE_KEY)
   if (!uri || !session || document.querySelector('.sheet-wrap')) return
   localStorage.removeItem(INVITE_KEY)
-  if ((profile?.teams ?? []).includes(uri)) {
+  if (isRemoved(roster, session.did, uri)) {
+    const t = await getTeam(uri)
+    return openSheet(`<p class="eyebrow">Team invite</p><h2>Can't join ${t ? esc(t.emoji + ' ' + t.name) : 'this team'}</h2>
+      <p>The organizer has removed you from this team. If you think that's a mistake, reach out to @${esc(HOST_HANDLE)}.</p>
+      <button class="btn btn-ghost" data-close>OK</button>`)
+  }
+  if (myTeams().includes(uri)) {
     localStorage.setItem(TEAM_KEY, uri)
     return toast(`You're already on ${teamLabel(uri)} 👍`)
   }
@@ -623,7 +639,7 @@ async function maybeAcceptInvite() {
     (el) => {
       $<HTMLButtonElement>('[data-join]', el).addEventListener('click', (e) =>
         busy(e.currentTarget as HTMLButtonElement, 'Joining…', async () => {
-          await setTeams([...(profile!.teams ?? []), uri])
+          await setMembership(uri, true)
           localStorage.setItem(TEAM_KEY, uri)
           closeSheet()
           renderApp()
@@ -633,7 +649,30 @@ async function maybeAcceptInvite() {
     })
 }
 
+// ── demo helpers (dev only) ──
+async function demoAll(): Promise<Member[]> {
+  const d = await import('./demo')
+  return d.demoEveryone(session!.did, profile!.teams ?? []).map((m) => ({ ...m, teams: effectiveTeams(m.did, { teams: m.teams, leftTeams: m.isYou ? profile!.leftTeams : [] }, roster) }))
+}
+async function demoBoard(): Promise<Member[]> {
+  const mine = new Set(myTeams())
+  return (await demoAll()).map((m) => ({ ...m, teams: m.teams.filter((t) => mine.has(t)) })).filter((m) => m.isYou || m.teams.length)
+}
+
+async function refreshRoster() {
+  if (isDemo) {
+    roster = await session!.agent.com.atproto.repo
+      .getRecord({ repo: session!.did, collection: 'io.github.911idonotcode.runadvent.roster', rkey: 'self' })
+      .then((r) => ({ ...emptyRoster(), ...(r.data.value as unknown as Roster) }))
+      .catch(() => emptyRoster())
+  } else {
+    // Never let a slow roster lookup hold up the page.
+    roster = await Promise.race([loadRoster(), new Promise<Roster>((r) => setTimeout(() => r(roster), 4000))])
+  }
+}
+
 // ── admin overview (creator only) ──
+const canEditRoster = () => isDemo || myHandle.toLowerCase() === ADMIN_HANDLES[0].toLowerCase()
 const isAdmin = () =>
   ADMIN_HANDLES.map((h) => h.toLowerCase()).includes(myHandle.toLowerCase()) ||
   (isDemo && new URLSearchParams(location.search).has('demo-admin'))
@@ -645,15 +684,13 @@ async function openAdmin() {
       const body = $('.admin-body', el)
       let everyone: Member[]
       try {
-        everyone = isDemo
-          ? (await import('./demo')).demoEveryone(session!.did, profile!.teams ?? [])
-          : await loadEveryone(session!.did)
+        everyone = isDemo ? await demoAll() : await loadEveryone(session!.did, roster)
       } catch (e) {
         console.error(e)
         body.innerHTML = '<p class="error">Couldn’t load participants right now. Try again in a minute.</p>'
         return
       }
-      const allTeams = [...new Set(everyone.flatMap((m) => m.teams))]
+      const allTeams = [...new Set([...everyone.flatMap((m) => m.teams), ...roster.add.map((e) => e.team), ...(profile!.teams ?? [])])]
       await Promise.all(allTeams.map(getTeam))
       const u = units()
       const dist = (m: number) => fmtDist(Math.round(toUnits(m, u) * 10) / 10, u, false)
@@ -682,17 +719,21 @@ async function openAdmin() {
         <h3 class="admin-h">Participants</h3>
         <input class="admin-search" type="search" placeholder="Search name, handle or team" />
         <div class="admin-table-wrap"><table class="admin-table people">
-          <thead><tr><th>Name</th><th>Teams</th><th>Days</th><th>${u}</th><th>Streak</th></tr></thead>
+          <thead><tr><th>Name</th><th>Teams</th><th>Days</th><th>${u}</th><th>Streak</th><th></th></tr></thead>
           <tbody>${everyone
             .map((m) => `<tr data-q="${esc((m.name + ' ' + m.handle + ' ' + m.teams.map(label).join(' ')).toLowerCase())}">
               <td><b>${esc(m.name)}</b>${m.handle ? `<br/><a href="https://bsky.app/profile/${esc(m.handle)}" target="_blank" rel="noopener">@${esc(m.handle)}</a>` : ''}</td>
               <td>${m.teams.length ? m.teams.map((t) => esc(label(t))).join('<br/>') : '<span class="muted">Solo</span>'}</td>
-              <td>${m.doors}</td><td>${dist(m.meters)}</td><td>${m.streak >= 2 ? `✓ ${m.streak}` : '–'}</td></tr>`)
+              <td>${m.doors}</td><td>${dist(m.meters)}</td><td>${m.streak >= 2 ? `✓ ${m.streak}` : '–'}</td>
+              <td>${canEditRoster() ? `<button class="mini" data-edit="${esc(m.did)}">Edit teams</button>` : ''}</td></tr>`)
             .join('')}</tbody>
         </table></div>
         <button class="btn btn-ghost" data-csv>Download CSV</button>
         <p class="small">Includes everyone with a calendar profile, even people who hide from team boards. Updated when you open this.</p>`
 
+      body.querySelectorAll<HTMLElement>('[data-edit]').forEach((b) =>
+        b.addEventListener('click', () => editMemberTeams(everyone.find((m) => m.did === b.dataset.edit)!, allTeams)),
+      )
       const search = $<HTMLInputElement>('.admin-search', body)
       search.addEventListener('input', () => {
         const q = search.value.trim().toLowerCase()
@@ -708,6 +749,46 @@ async function openAdmin() {
         a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }))
         a.download = `running-advent-participants-${new Date().toISOString().slice(0, 10)}.csv`
         a.click()
+      })
+    })
+}
+
+function editMemberTeams(m: Member, allTeams: string[]) {
+  const label = (t: string) => (teamInfo.get(t) ? teamLabel(t) : 'Deleted team')
+  openSheet(`
+    <p class="eyebrow">Admin · edit teams</p>
+    <h2>${esc(m.name)}</h2>
+    ${m.handle ? `<p class="small">@${esc(m.handle)}</p>` : ''}
+    ${allTeams.length ? `<form class="edit-teams">
+      ${allTeams.map((t) => `<label class="check team-row">
+        <input type="checkbox" name="team" value="${esc(t)}" ${m.teams.includes(t) ? 'checked' : ''} />
+        <span>${esc(label(t))}${isRemoved(roster, m.did, t) ? ' <em class="removed">removed by you</em>' : ''}</span>
+      </label>`).join('')}
+      <p class="small">Adding someone puts them on that team's board. Removing them takes them off and stops them rejoining with the invite link. They're not notified.</p>
+      <button class="btn btn-green" type="submit">Save</button>
+    </form>` : '<p>No teams exist yet.</p>'}
+    <button class="btn btn-ghost" data-back>Back to Admin</button>`,
+    (el) => {
+      $('[data-back]', el).addEventListener('click', openAdmin)
+      const form = el.querySelector<HTMLFormElement>('form.edit-teams')
+      form?.addEventListener('submit', (e) => {
+        e.preventDefault()
+        const want = new Set(new FormData(form).getAll('team').map(String))
+        let next = roster
+        for (const t of allTeams) {
+          const isOn = m.teams.includes(t)
+          if (want.has(t) !== isOn) next = rosterSet(next, m.did, t, want.has(t))
+        }
+        if (next === roster) return openAdmin()
+        busy($<HTMLButtonElement>('button[type=submit]', form), 'Saving…', async () => {
+          await saveRoster(session!.agent, session!.did, next)
+          roster = next
+          members = null
+          membersAt = 0
+          toast('Teams updated ✅')
+          renderApp()
+          openAdmin()
+        })
       })
     })
 }
@@ -1052,7 +1133,7 @@ async function boot() {
   if (!session) return renderLanding()
 
   try {
-    const [p, d] = await Promise.all([getProfile(session.agent, session.did), listDays(session.agent, session.did)])
+    const [p, d] = await Promise.all([getProfile(session.agent, session.did), listDays(session.agent, session.did), refreshRoster()])
     days = d
     profile = p
     myHandle = await session.agent.getProfile({ actor: session.did }).then(({ data }) => data.handle).catch(() => '')

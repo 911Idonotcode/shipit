@@ -1,5 +1,5 @@
 import type { Agent } from '@atproto/api'
-import { COLLECTION_DAY, COLLECTION_PROFILE, COLLECTION_TEAM, YEAR } from './config'
+import { COLLECTION_DAY, COLLECTION_PROFILE, COLLECTION_ROSTER, COLLECTION_TEAM, YEAR } from './config'
 
 export type Units = 'mi' | 'km'
 
@@ -10,6 +10,8 @@ export interface Profile {
   showOnBoard?: boolean
   /** at:// URIs of the teams this runner belongs to. */
   teams?: string[]
+  /** Teams the runner chose to leave (overrides an organizer add). */
+  leftTeams?: string[]
   /** User ticked the "own risk / health disclaimer" box. */
   acceptedTerms: boolean
   createdAt: string
@@ -81,7 +83,7 @@ export async function deleteDay(agent: Agent, did: string, day: number) {
 
 /** Removes every calendar record (all years), profile and teams you created. Bluesky posts are left alone. */
 export async function deleteAll(agent: Agent, did: string) {
-  for (const collection of [COLLECTION_DAY, COLLECTION_PROFILE, COLLECTION_TEAM]) {
+  for (const collection of [COLLECTION_DAY, COLLECTION_PROFILE, COLLECTION_TEAM, COLLECTION_ROSTER]) {
     let cursor: string | undefined
     do {
       const res = await agent.com.atproto.repo.listRecords({ repo: did, collection, limit: 100, cursor })
@@ -128,4 +130,51 @@ export const teamUri = (code: string) => {
   const rkey = code.slice(i + 1)
   if (!/^did:[a-z]+:[A-Za-z0-9._:%-]+$/.test(did) || !/^[A-Za-z0-9._:~-]{1,512}$/.test(rkey)) return null
   return `at://${did}/${COLLECTION_TEAM}/${rkey}`
+}
+
+// ── organizer roster ──
+// Runners' team lists live in their own repos, which only they can write.
+// The organizer keeps adds/removes in a roster record in *their* repo, and
+// the app applies it everywhere. (App-level control: records are public.)
+export interface RosterEntry {
+  team: string
+  did: string
+}
+export interface Roster {
+  add: RosterEntry[]
+  remove: RosterEntry[]
+  updatedAt: string
+}
+export const emptyRoster = (): Roster => ({ add: [], remove: [], updatedAt: '' })
+
+const same = (a: RosterEntry, b: RosterEntry) => a.team === b.team && a.did === b.did
+
+/** The teams someone is really on, once the organizer's roster is applied. */
+export function effectiveTeams(did: string, profile: Pick<Profile, 'teams' | 'leftTeams'> | null, roster: Roster): string[] {
+  const added = roster.add.filter((e) => e.did === did).map((e) => e.team)
+  const removed = new Set(roster.remove.filter((e) => e.did === did).map((e) => e.team))
+  const left = new Set(profile?.leftTeams ?? [])
+  return [...new Set([...(profile?.teams ?? []), ...added])].filter((t) => !removed.has(t) && !left.has(t))
+}
+
+export const isRemoved = (roster: Roster, did: string, team: string) => roster.remove.some((e) => same(e, { did, team }))
+
+/** Returns a new roster with `did` added to / removed from `team`. */
+export function rosterSet(roster: Roster, did: string, team: string, member: boolean): Roster {
+  const e = { did, team }
+  return {
+    add: [...roster.add.filter((x) => !same(x, e)), ...(member ? [e] : [])],
+    remove: [...roster.remove.filter((x) => !same(x, e)), ...(member ? [] : [e])],
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+export async function saveRoster(agent: Agent, did: string, roster: Roster) {
+  await agent.com.atproto.repo.putRecord({
+    repo: did,
+    collection: COLLECTION_ROSTER,
+    rkey: 'self',
+    record: { $type: COLLECTION_ROSTER, ...roster },
+    validate: false,
+  })
 }

@@ -72,6 +72,7 @@ const NS = 'io.github.911idonotcode.runadvent'
 export const COLLECTION_DAY = `${NS}.day`
 export const COLLECTION_PROFILE = `${NS}.profile`
 export const COLLECTION_TEAM = `${NS}.team`
+export const COLLECTION_ROSTER = `${NS}.roster`
 
 export const MI_TO_KM = 1.609344
 

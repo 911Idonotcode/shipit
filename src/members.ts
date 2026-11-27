@@ -1,6 +1,6 @@
-import { COLLECTION_DAY, COLLECTION_PROFILE, YEAR } from './config'
+import { ADMIN_HANDLES, COLLECTION_DAY, COLLECTION_PROFILE, COLLECTION_ROSTER, YEAR } from './config'
 import { stats } from './calendar'
-import type { DayRecord, Profile, Team } from './data'
+import { effectiveTeams, emptyRoster, type DayRecord, type Profile, type Roster, type Team } from './data'
 
 /**
  * Team boards: runners who share a team with you, discovered via the Bluesky
@@ -54,11 +54,12 @@ async function pdsOf(did: string): Promise<string> {
   return svc.serviceEndpoint
 }
 
-async function readMember(did: string, myTeams: Set<string> | 'all') {
+async function readMember(did: string, myTeams: Set<string> | 'all', roster: Roster) {
   const pds = await pdsOf(did)
   const xrpc = (m: string, q: Record<string, string>) => getJson(`${pds}/xrpc/${m}?${new URLSearchParams(q)}`)
   const prof = (await xrpc('com.atproto.repo.getRecord', { repo: did, collection: COLLECTION_PROFILE, rkey: 'self' })).value as Profile
-  const shared = myTeams === 'all' ? (prof.teams ?? []) : (prof.teams ?? []).filter((t) => myTeams.has(t))
+  const teams = effectiveTeams(did, prof, roster)
+  const shared = myTeams === 'all' ? teams : teams.filter((t) => myTeams.has(t))
   if (myTeams !== 'all') {
     if (prof.showOnBoard === false) return null
     if (!shared.length) return null // not a teammate: don't read their runs
@@ -112,12 +113,12 @@ async function pool<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Prom
  * Loads the board. `self` is the signed-in runner's own (already loaded) data,
  * so they always appear even if the network index hasn't caught up yet.
  */
-export async function loadMembers(self: { did: string; profile: Profile; days: Map<number, DayRecord> }): Promise<Member[]> {
-  const myTeams = new Set(self.profile.teams ?? [])
+export async function loadMembers(self: { did: string; profile: Profile; days: Map<number, DayRecord> }, roster: Roster): Promise<Member[]> {
+  const myTeams = new Set(effectiveTeams(self.did, self.profile, roster))
   const me = { did: self.did, name: self.profile.name, days: self.days, teams: [...myTeams] }
   if (!myTeams.size) return finish([me], self.did) // running solo: nothing to look up
   const dids = (await memberDids()).filter((d) => d !== self.did)
-  const others = (await pool(dids, 6, (d) => readMember(d, myTeams).catch(() => null))).filter((m) => m !== null)
+  const others = (await pool(dids, 6, (d) => readMember(d, myTeams, roster).catch(() => null))).filter((m) => m !== null)
   return finish([me, ...others], self.did)
 }
 
@@ -156,8 +157,32 @@ export async function loadTeam(uri: string): Promise<Team | null> {
 }
 
 /** Admin overview: every participant (including solo runners) and their teams. */
-export async function loadEveryone(selfDid: string): Promise<Member[]> {
+export async function loadEveryone(selfDid: string, roster: Roster): Promise<Member[]> {
   const dids = [...new Set([selfDid, ...(await memberDids())])]
-  const all = (await pool(dids, 6, (d) => readMember(d, 'all').catch(() => null))).filter((m) => m !== null)
+  const all = (await pool(dids, 6, (d) => readMember(d, 'all', roster).catch(() => null))).filter((m) => m !== null)
   return finish(all, selfDid)
+}
+
+/** The organizer's account (first ADMIN_HANDLES entry). */
+export async function organizerDid(): Promise<string | null> {
+  try {
+    const res = await getJson(`${APPVIEW}/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(ADMIN_HANDLES[0])}`)
+    return res.did ?? null
+  } catch {
+    return null
+  }
+}
+
+/** Reads the organizer's team roster (adds/removes). Empty if none or unreachable. */
+export async function loadRoster(): Promise<Roster> {
+  try {
+    const did = await organizerDid()
+    if (!did) return emptyRoster()
+    const pds = await pdsOf(did)
+    const res = await getJson(`${pds}/xrpc/com.atproto.repo.getRecord?${new URLSearchParams({ repo: did, collection: COLLECTION_ROSTER, rkey: 'self' })}`)
+    const v = res.value as Roster
+    return { add: v.add ?? [], remove: v.remove ?? [], updatedAt: v.updatedAt ?? '' }
+  } catch {
+    return emptyRoster() // no roster yet
+  }
 }

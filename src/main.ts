@@ -127,6 +127,7 @@ function renderLanding(error = '') {
     ${lights()}
     <main class="wrap landing">
       <h1 class="host">${APP_NAME} ${WREATH}</h1>
+      <p class="subtitle">A Movement Advent Calendar</p>
       <p class="credit">made by <a href="https://bsky.app/profile/${esc(HOST_HANDLE)}" target="_blank" rel="noopener">@${esc(HOST_HANDLE)}</a></p>
       <p class="lede">24 days. 24 runs or walks.<br/>Two plans: Easy going or Intermediate.</p>
       <div class="invite-banner" hidden></div>

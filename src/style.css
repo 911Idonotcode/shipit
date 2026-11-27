@@ -262,6 +262,7 @@ h1, h2, h3, .num, .btn, .countdown b, .stats b, .target { font-family: var(--dis
 
 /* ── branding ── */
 .wreath { width: 0.95em; height: 0.95em; vertical-align: -0.12em; display: inline-block; }
+.subtitle { margin: 6px 0 0; font-family: var(--display); font-weight: 700; font-size: clamp(20px, 5.6vw, 28px); color: var(--cream); letter-spacing: -0.01em; }
 .credit { margin: 6px 0 14px; color: var(--muted); font-size: 15px; }
 .credit a { color: var(--cream); font-weight: 600; }
 .top-btns { display: flex; gap: 8px; align-items: center; }

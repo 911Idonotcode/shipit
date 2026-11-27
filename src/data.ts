@@ -19,6 +19,8 @@ export interface DayRecord {
   /** Optional moving time. */
   durationSeconds?: number
   note?: string
+  /** Strava activity this was imported from, if any. */
+  stravaActivityId?: number
   /** URI of the Bluesky post, if the runner shared it. */
   postUri?: string
   completedAt: string

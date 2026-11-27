@@ -63,3 +63,9 @@ export const COLLECTION_DAY = `${NS}.day`
 export const COLLECTION_PROFILE = `${NS}.profile`
 
 export const MI_TO_KM = 1.609344
+
+/**
+ * Strava import: the address of your Cloudflare worker (see STRAVA_SETUP.md),
+ * e.g. 'https://runadvent-strava.yourname.workers.dev'. Leave '' to hide Strava.
+ */
+export const STRAVA_WORKER_URL = ''

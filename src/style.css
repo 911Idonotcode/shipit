@@ -268,6 +268,22 @@ h1, h2, h3, .num, .btn, .countdown b, .stats b, .target { font-family: var(--dis
 .photo-btn { cursor: pointer; }
 .posted a { color: var(--sky); font-weight: 700; }
 
+/* ── Strava ── */
+.btn-strava { background: #fc4c02; color: #fff; box-shadow: 0 10px 30px rgba(252, 76, 2, 0.3); }
+.strava-link { color: #ff8a50; margin: -6px 0 14px; }
+.strava-list { margin: -2px 0 16px; display: grid; gap: 8px; }
+.strava-act {
+  display: grid; gap: 2px; text-align: left; padding: 12px 16px; border-radius: 16px;
+  background: rgba(252, 76, 2, 0.1); border: 1px solid rgba(252, 76, 2, 0.35);
+}
+.strava-act span { font-size: 14px; color: var(--muted); }
+.strava-act:hover { background: rgba(252, 76, 2, 0.18); }
+.powered { margin: 2px 0 0; font-size: 12px; color: #fc4c02; font-weight: 700; text-align: right; }
+.strava-box { margin: 6px 0 12px; padding: 16px; border-radius: 20px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); }
+.strava-box > span { font-family: var(--display); font-weight: 800; font-size: 18px; }
+.strava-box .small { margin: 4px 0 12px; }
+.strava-box .btn { margin: 0; }
+
 /* ── toast & confetti ── */
 .toast {
   position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%);

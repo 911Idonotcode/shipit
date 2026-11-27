@@ -6,6 +6,7 @@ import {
   currentDay, doorOpensAt, doorState, fmtDist, fmtDuration, fmtPace, metersFrom, milesToUnits, now,
   parseDuration, stats, target, toUnits,
 } from './calendar'
+import { activitiesOn, connectStrava, disconnectStrava, handleStravaReturn, stravaAthlete, stravaConnected, stravaEnabled, type Activity } from './strava'
 import { defaultPostText, drawCard, graphemeLength, loadPhoto, postToBluesky, postUrl, shareImage, toJpeg, type CardInput } from './share'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
@@ -109,6 +110,7 @@ function renderLanding(error = '') {
           <li><span>⏱️</span>No pace requirements. Run, jog, walk.</li>
           <li><span>🦋</span>Sign in with Bluesky. Your runs live in your account.</li>
           <li><span>📸</span>Share each door to Bluesky or Instagram</li>
+          ${stravaEnabled() ? '<li><span>🧡</span>Optional: connect Strava to import your runs</li>' : ''}
           <li><span>❤️</span>All welcome!</li>
         </ul>
         <label class="field">
@@ -173,6 +175,8 @@ function openInfo() {
       <h4>Where your data lives</h4>
       <p>There's no separate database. When you open a door, the calendar saves a small record (day, distance, optional time and note) <strong>in your own Bluesky account</strong>, the same place your posts live. Like posts, these records are public on the AT Protocol network.</p>
       <p>Photos stay on your device. One only leaves it if you choose <em>Post to Bluesky</em> or share it yourself.</p>
+      ${stravaEnabled() ? `<h4>Strava (optional)</h4>
+      <p>If you connect Strava, the calendar only <em>reads</em> your runs and walks for the door you're opening, and only when you tap <em>Import from Strava</em>. Your Strava login stays on this device. You can disconnect anytime in Settings.</p>` : ''}
       <p><em>Delete my data</em> in Settings removes every calendar record from your account. Posts you've shared stay until you delete them in Bluesky.</p>
     </div>`)
 }
@@ -374,6 +378,9 @@ function openLog(day: number) {
     <h2>${esc(t.title)}</h2>
     <p class="target-chip">Suggested distance: <b>${fmtDist(milesToUnits(t.miles, u), u)}</b></p>
     <p class="small">Enter the distance you actually covered. Any amount counts.</p>
+    ${stravaEnabled() ? (stravaConnected()
+      ? `<button class="btn btn-strava" type="button" data-import>Import from Strava</button><div class="strava-list" hidden></div>`
+      : `<button class="link strava-link" type="button" data-connect>Connect Strava to import your runs</button>`) : ''}
     <form class="log" novalidate>
       <div class="row">
         <label class="field"><span>Distance (${u})</span>
@@ -388,6 +395,44 @@ function openLog(day: number) {
     </form>`,
     (el) => {
       const form = $<HTMLFormElement>('form', el)
+      let stravaId = rec?.stravaActivityId
+      el.querySelector('[data-connect]')?.addEventListener('click', connectStrava)
+      el.querySelector<HTMLButtonElement>('[data-import]')?.addEventListener('click', (e) =>
+        busy(e.currentTarget as HTMLButtonElement, 'Checking Strava…', async () => {
+          const list = $('.strava-list', el)
+          const acts = await activitiesOn(day)
+          list.hidden = false
+          if (!acts.length) {
+            list.innerHTML = `<p class="small">No runs or walks on Strava for ${monthDay(day)} yet. You can still type the distance below.</p>`
+            return
+          }
+          const fill = (a: { distance: number; moving_time: number; name: string; id?: number }) => {
+            ;(form.elements.namedItem('dist') as HTMLInputElement).value = fmtDist(toUnits(a.distance, u), u, false)
+            ;(form.elements.namedItem('time') as HTMLInputElement).value = fmtDuration(a.moving_time)
+            const note = form.elements.namedItem('note') as HTMLInputElement
+            if (!note.value) note.value = a.name.slice(0, 140)
+            stravaId = a.id
+            list.innerHTML = `<p class="small">✓ Filled in from Strava. Check it and tap the button below.</p>`
+          }
+          list.innerHTML =
+            acts.map((a, i) => `<button type="button" class="strava-act" data-i="${i}">
+              <b>${esc(a.name)}</b>
+              <span>${esc(a.type)} · ${fmtDist(toUnits(a.distance, u), u)} · ${fmtDuration(a.moving_time)}</span>
+            </button>`).join('') +
+            (acts.length > 1 ? `<button type="button" class="link" data-all>Add them all together</button>` : '') +
+            `<p class="powered">Activity data from Strava</p>`
+          list.querySelectorAll<HTMLElement>('.strava-act').forEach((b) =>
+            b.addEventListener('click', () => fill(acts[Number(b.dataset.i)])),
+          )
+          list.querySelector('[data-all]')?.addEventListener('click', () =>
+            fill({
+              distance: acts.reduce((n: number, a: Activity) => n + a.distance, 0),
+              moving_time: acts.reduce((n: number, a: Activity) => n + a.moving_time, 0),
+              name: acts.map((a) => a.name).join(' + '),
+            }),
+          )
+        }),
+      )
       form.addEventListener('submit', async (e) => {
         e.preventDefault()
         const fd = new FormData(form)
@@ -403,6 +448,7 @@ function openLog(day: number) {
           ...(dur ? { durationSeconds: dur } : {}),
           ...(String(fd.get('note') ?? '').trim() ? { note: String(fd.get('note')).trim() } : {}),
           ...(rec?.postUri ? { postUri: rec.postUri } : {}),
+          ...(stravaId ? { stravaActivityId: stravaId } : {}),
           completedAt: rec?.completedAt ?? new Date().toISOString(),
         }
         await busy($<HTMLButtonElement>('button[type=submit]', form), 'Saving…', async () => {
@@ -532,6 +578,14 @@ function openSettings() {
         </div>
       </div>
       <button class="btn btn-green" type="submit">Save</button>
+      ${stravaEnabled() ? `<div class="strava-box">
+        <span>Strava</span>
+        ${stravaConnected()
+          ? `<p class="small">Connected${stravaAthlete() ? ' as ' + esc(stravaAthlete()!) : ''} on this device.</p>
+             <button class="btn btn-ghost" type="button" data-strava-off>Disconnect Strava</button>`
+          : `<p class="small">Import your runs and walks instead of typing them.</p>
+             <button class="btn btn-strava" type="button" data-strava-on>Connect with Strava</button>`}
+      </div>` : ''}
       <button class="btn btn-ghost" type="button" data-signout>Sign out</button>
       <button class="btn btn-ghost danger" type="button" data-delete>Delete my data</button>
       <p class="small center">Signed in as ${esc(myHandle ? '@' + myHandle : session!.did)}</p>
@@ -554,6 +608,14 @@ function openSettings() {
           toast('Saved ✨')
         })
       })
+      el.querySelector('[data-strava-on]')?.addEventListener('click', connectStrava)
+      el.querySelector<HTMLButtonElement>('[data-strava-off]')?.addEventListener('click', (e) =>
+        busy(e.currentTarget as HTMLButtonElement, 'Disconnecting…', async () => {
+          await disconnectStrava()
+          openSettings()
+          toast('Strava disconnected')
+        }),
+      )
       $('[data-signout]', el).addEventListener('click', async () => {
         await signOut(session!)
         location.reload()
@@ -562,6 +624,7 @@ function openSettings() {
         if (!confirm('Delete all your Running Advent Calendar data from your Bluesky account? Posts you shared stay until you delete them in Bluesky. This can’t be undone.')) return
         busy(e.currentTarget as HTMLButtonElement, 'Deleting…', async () => {
           await deleteAll(session!.agent, session!.did)
+          if (stravaConnected()) await disconnectStrava()
           localStorage.removeItem(TERMS_KEY)
           await signOut(session!)
           alert('Your calendar data was deleted.')
@@ -575,6 +638,8 @@ function openSettings() {
 async function boot() {
   ambience()
   app.innerHTML = `${lights()}<main class="wrap loading"><div class="spinner big"></div></main>`
+  const stravaResult = handleStravaReturn() // must run before Bluesky sign-in reads the URL
+  if (stravaResult) setTimeout(() => toast(stravaResult.msg, stravaResult.ok ? 'ok' : 'err'), 600)
   try {
     session =
       import.meta.env.DEV && new URLSearchParams(location.search).has('demo')

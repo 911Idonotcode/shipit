@@ -2,7 +2,7 @@
 
 24 days. 24 runs (or walks). Anywhere from 1 to 6 miles. Hosted by [@acastanedalife.bsky.social](https://bsky.app/profile/acastanedalife.bsky.social).
 
-**Live site:** https://911idonotcode.github.io/Training-Plan-Builder/
+**Live site:** https://911idonotcode.github.io/shipit/
 
 - People sign in with their **Bluesky** account. No email list and no database.
 - Each opened door is saved as a small record **in the runner's own Bluesky account** (AT Protocol), so runners own their data. *Delete my data* in Settings removes it.

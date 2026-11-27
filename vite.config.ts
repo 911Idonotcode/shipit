@@ -2,9 +2,9 @@ import { defineConfig, type Plugin } from 'vite'
 
 /**
  * Public URL of the deployed site (must end with "/").
- * Defaults to this repo's GitHub Pages address; override with SITE_URL=... npm run build
+ * Set automatically by the deploy workflow; the default is used for local builds; override with SITE_URL=... npm run build
  */
-const SITE_URL = process.env.SITE_URL ?? 'https://911idonotcode.github.io/Training-Plan-Builder/'
+const SITE_URL = (process.env.SITE_URL || 'https://911idonotcode.github.io/shipit/').replace(/\/*$/, '/')
 
 /** Publishes the Bluesky OAuth client metadata document next to index.html. */
 function oauthClientMetadata(): Plugin {

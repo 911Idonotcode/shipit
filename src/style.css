@@ -330,6 +330,8 @@ h1, h2, h3, .num, .btn, .countdown b, .stats b, .target { font-family: var(--dis
 .preview-seg { display: inline-flex; margin: 2px 0 16px; }
 .preview-door { padding: 16px; margin-bottom: 14px; border: 1px dashed rgba(244, 195, 77, 0.45); border-radius: 22px; }
 .preview-door h2 { font-size: 28px; }
+.preview-door .quote { margin-bottom: 8px; }
+.preview-note { margin: 0 0 14px; }
 .preview-door input:disabled { opacity: 0.85; }
 .preview-door .preview { max-width: 280px; margin-bottom: 4px; }
 

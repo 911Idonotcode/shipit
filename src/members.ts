@@ -1,10 +1,11 @@
 import { COLLECTION_DAY, COLLECTION_PROFILE, YEAR } from './config'
 import { stats } from './calendar'
-import type { DayRecord, Profile } from './data'
+import type { DayRecord, Profile, Team } from './data'
 
 /**
- * Member board: everyone who has a calendar profile record, discovered via the
- * Bluesky relay's public collection index — no server of our own needed.
+ * Team boards: runners who share a team with you, discovered via the Bluesky
+ * relay's public collection index (everyone with a calendar profile), then
+ * filtered by the team URIs on their profile. No server of our own needed.
  */
 const RELAY = 'https://relay1.us-east.bsky.network'
 const APPVIEW = 'https://public.api.bsky.app'
@@ -20,6 +21,7 @@ export interface Member {
   streak: number
   meters: number
   isYou: boolean
+  teams: string[]
 }
 
 async function getJson(url: string) {
@@ -52,11 +54,15 @@ async function pdsOf(did: string): Promise<string> {
   return svc.serviceEndpoint
 }
 
-async function readMember(did: string) {
+async function readMember(did: string, myTeams: Set<string> | 'all') {
   const pds = await pdsOf(did)
   const xrpc = (m: string, q: Record<string, string>) => getJson(`${pds}/xrpc/${m}?${new URLSearchParams(q)}`)
   const prof = (await xrpc('com.atproto.repo.getRecord', { repo: did, collection: COLLECTION_PROFILE, rkey: 'self' })).value as Profile
-  if (prof.showOnBoard === false) return null
+  const shared = myTeams === 'all' ? (prof.teams ?? []) : (prof.teams ?? []).filter((t) => myTeams.has(t))
+  if (myTeams !== 'all') {
+    if (prof.showOnBoard === false) return null
+    if (!shared.length) return null // not a teammate: don't read their runs
+  }
   const days = new Map<number, DayRecord>()
   let cursor = ''
   do {
@@ -69,7 +75,7 @@ async function readMember(did: string) {
     }
     cursor = res.cursor ?? ''
   } while (cursor)
-  return { did, name: prof.name, days }
+  return { did, name: prof.name, days, teams: shared }
 }
 
 /** Bluesky handles + avatars, 25 at a time. */
@@ -107,9 +113,15 @@ async function pool<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Prom
  * so they always appear even if the network index hasn't caught up yet.
  */
 export async function loadMembers(self: { did: string; profile: Profile; days: Map<number, DayRecord> }): Promise<Member[]> {
+  const myTeams = new Set(self.profile.teams ?? [])
+  const me = { did: self.did, name: self.profile.name, days: self.days, teams: [...myTeams] }
+  if (!myTeams.size) return finish([me], self.did) // running solo: nothing to look up
   const dids = (await memberDids()).filter((d) => d !== self.did)
-  const others = (await pool(dids, 6, (d) => readMember(d).catch(() => null))).filter((m) => m !== null)
-  const all = [...(self.profile.showOnBoard === false ? [] : [{ did: self.did, name: self.profile.name, days: self.days }]), ...others]
+  const others = (await pool(dids, 6, (d) => readMember(d, myTeams).catch(() => null))).filter((m) => m !== null)
+  return finish([me, ...others], self.did)
+}
+
+async function finish(all: { did: string; name: string; days: Map<number, DayRecord>; teams: string[] }[], selfDid: string) {
   const bsky = await bskyProfiles(all.map((m) => m.did))
   return all
     .map((m) => {
@@ -123,8 +135,29 @@ export async function loadMembers(self: { did: string; profile: Profile; days: M
         doors: s.doors,
         streak: s.streak,
         meters: s.meters,
-        isYou: m.did === self.did,
+        isYou: m.did === selfDid,
+        teams: m.teams,
       }
     })
     .sort((a, b) => Number(b.isYou) - Number(a.isYou) || a.name.localeCompare(b.name))
+}
+
+/** Reads a team record from its creator's account. */
+export async function loadTeam(uri: string): Promise<Team | null> {
+  try {
+    const [, , did, collection, rkey] = uri.split('/')
+    const pds = await pdsOf(did)
+    const res = await getJson(`${pds}/xrpc/com.atproto.repo.getRecord?${new URLSearchParams({ repo: did, collection, rkey })}`)
+    const v = res.value as Team
+    return { name: String(v.name || 'Team').slice(0, 40), emoji: String(v.emoji || '🏃').slice(0, 8), createdAt: v.createdAt }
+  } catch {
+    return null
+  }
+}
+
+/** Admin overview: every participant (including solo runners) and their teams. */
+export async function loadEveryone(selfDid: string): Promise<Member[]> {
+  const dids = [...new Set([selfDid, ...(await memberDids())])]
+  const all = (await pool(dids, 6, (d) => readMember(d, 'all').catch(() => null))).filter((m) => m !== null)
+  return finish(all, selfDid)
 }

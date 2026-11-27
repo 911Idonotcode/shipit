@@ -1,13 +1,15 @@
 import type { Agent } from '@atproto/api'
-import { COLLECTION_DAY, COLLECTION_PROFILE, YEAR } from './config'
+import { COLLECTION_DAY, COLLECTION_PROFILE, COLLECTION_TEAM, YEAR } from './config'
 
 export type Units = 'mi' | 'km'
 
 export interface Profile {
   name: string
   units: Units
-  /** Listed on the Member board (default: yes). */
+  /** Listed on your team boards (default: yes). */
   showOnBoard?: boolean
+  /** at:// URIs of the teams this runner belongs to. */
+  teams?: string[]
   /** User ticked the "own risk / health disclaimer" box. */
   acceptedTerms: boolean
   createdAt: string
@@ -77,9 +79,9 @@ export async function deleteDay(agent: Agent, did: string, day: number) {
   await agent.com.atproto.repo.deleteRecord({ repo: did, collection: COLLECTION_DAY, rkey: dayKey(day) })
 }
 
-/** Removes every calendar record (all years) + profile. Bluesky posts are left alone. */
+/** Removes every calendar record (all years), profile and teams you created. Bluesky posts are left alone. */
 export async function deleteAll(agent: Agent, did: string) {
-  for (const collection of [COLLECTION_DAY, COLLECTION_PROFILE]) {
+  for (const collection of [COLLECTION_DAY, COLLECTION_PROFILE, COLLECTION_TEAM]) {
     let cursor: string | undefined
     do {
       const res = await agent.com.atproto.repo.listRecords({ repo: did, collection, limit: 100, cursor })
@@ -92,4 +94,38 @@ export async function deleteAll(agent: Agent, did: string) {
       cursor = res.data.cursor
     } while (cursor)
   }
+}
+
+// ── teams ──
+export interface Team {
+  name: string
+  emoji: string
+  createdAt: string
+}
+
+/** Team records live in the creator's repo; the at:// URI is the team's identity. */
+export async function createTeam(agent: Agent, did: string, team: Team): Promise<string> {
+  const rkey = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+  const res = await agent.com.atproto.repo.putRecord({
+    repo: did,
+    collection: COLLECTION_TEAM,
+    rkey,
+    record: { $type: COLLECTION_TEAM, ...team },
+    validate: false,
+  })
+  return res.data.uri
+}
+
+/** Short invite code: "<did>~<rkey>" ⇄ at://<did>/<team collection>/<rkey> */
+export const teamCode = (uri: string) => {
+  const [, , did, , rkey] = uri.split('/')
+  return `${did}~${rkey}`
+}
+export const teamUri = (code: string) => {
+  const i = code.indexOf('~')
+  if (i < 0) return null
+  const did = code.slice(0, i)
+  const rkey = code.slice(i + 1)
+  if (!/^did:[a-z]+:[A-Za-z0-9._:%-]+$/.test(did) || !/^[A-Za-z0-9._:~-]{1,512}$/.test(rkey)) return null
+  return `at://${did}/${COLLECTION_TEAM}/${rkey}`
 }

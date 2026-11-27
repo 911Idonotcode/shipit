@@ -1,18 +1,24 @@
 import './style.css'
-import { HASHTAG, HOST_HANDLE, LAYOUT, YEAR } from './config'
+import { ADMIN_HANDLES, HASHTAG, HOST_HANDLE, LAYOUT, YEAR } from './config'
 import { initSession, signIn, signOut, type Session } from './auth'
-import { deleteAll, deleteDay, getProfile, listDays, saveDay, saveProfile, type DayRecord, type Profile, type Units } from './data'
+import {
+  createTeam, deleteAll, deleteDay, getProfile, listDays, saveDay, saveProfile, teamCode, teamUri,
+  type DayRecord, type Profile, type Team, type Units,
+} from './data'
 import {
   currentDay, doorOpensAt, doorState, fmtDist, fmtDuration, fmtPace, metersFrom, milesToUnits, now,
   parseDuration, stats, target, toUnits,
 } from './calendar'
 import { activitiesOn, connectStrava, disconnectStrava, handleStravaReturn, stravaAthlete, stravaConnected, stravaEnabled, type Activity } from './strava'
 import { attachHandleTypeahead } from './typeahead'
-import { loadMembers, type Member } from './members'
+import { loadEveryone, loadMembers, loadTeam, type Member } from './members'
 import { defaultPostText, drawCard, graphemeLength, loadPhoto, postToBluesky, postUrl, shareImage, toJpeg, type CardInput } from './share'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 const TERMS_KEY = 'runadvent:accepted-terms'
+const INVITE_KEY = 'runadvent:pending-invite'
+const TEAM_KEY = 'runadvent:selected-team'
+const isDemo = import.meta.env.DEV && new URLSearchParams(location.search).has('demo')
 
 let session: Session | null = null
 let profile: Profile | null = null
@@ -99,9 +105,10 @@ function renderLanding(error = '') {
   app.innerHTML = `
     ${lights()}
     <main class="wrap landing">
-      <h1 class="host">@${esc(HOST_HANDLE).replace(/\./, '<wbr>.')}</h1>
-      <h2 class="title">🎄 Running Advent Calendar</h2>
+      <h1 class="host">🎄 Running Advent Calendar</h1>
+      <p class="credit">made by <a href="https://bsky.app/profile/${esc(HOST_HANDLE)}" target="_blank" rel="noopener">@${esc(HOST_HANDLE)}</a></p>
       <p class="lede">24 days. 24 runs or walks.<br/>1–5 miles on weekdays. Weekends go long.</p>
+      <div class="invite-banner" hidden></div>
       <form class="card join" novalidate>
         <h3>A few things to know:</h3>
         <ul class="facts">
@@ -112,6 +119,7 @@ function renderLanding(error = '') {
           <li><span>⏱️</span>No pace requirements. Run, jog, walk.</li>
           <li><span>🦋</span>Sign in with Bluesky. Your activity lives in your account.</li>
           <li><span>📸</span>Share your activity on Bluesky or Instagram</li>
+          <li><span>🤝</span>Go solo, or start a team with friends</li>
           ${stravaEnabled() ? '<li><span>🧡</span>Optional: connect Strava to import your runs</li>' : ''}
           <li><span>❤️</span>All experience levels are welcome! Let's have fun!</li>
         </ul>
@@ -163,11 +171,22 @@ function renderLanding(error = '') {
     })
   })
   bindCommon()
+  showInviteBanner()
+}
+
+async function showInviteBanner() {
+  const uri = localStorage.getItem(INVITE_KEY)
+  const el = document.querySelector<HTMLElement>('.invite-banner')
+  if (!uri || !el) return
+  const team = await getTeam(uri)
+  if (!team) return
+  el.innerHTML = `<b>${esc(team.emoji)} You're invited to join ${esc(team.name)}!</b><span>Sign in below and we'll add you to the team.</span>`
+  el.hidden = false
 }
 
 function footer() {
   return `<footer class="foot">
-    <a href="https://bsky.app/profile/${esc(HOST_HANDLE)}" target="_blank" rel="noopener">@${esc(HOST_HANDLE)}</a>
+    Made by <a href="https://bsky.app/profile/${esc(HOST_HANDLE)}" target="_blank" rel="noopener">@${esc(HOST_HANDLE)}</a>
     · Run safe, listen to your body, rest when you need to. ·
     <a href="#" data-info>Health &amp; privacy</a>
   </footer>`
@@ -190,7 +209,8 @@ function openInfo() {
       <p>This is a just-for-fun challenge, not medical or coaching advice. Check with a doctor before starting any new exercise, go at your own pace, walk whenever you like, and skip a day if something hurts. You take part at your own risk.</p>
       <h4>Where your data lives</h4>
       <p>There's no separate database. When you open a door, the calendar saves a small record (day, distance, optional time and note) <strong>in your own Bluesky account</strong>, the same place your posts live. Like posts, these records are public on the AT Protocol network.</p>
-      <p><strong>Member board:</strong> everyone taking part can see your name, Bluesky handle, days completed, streak and total distance. You can hide yourself anytime in Settings.</p>
+      <p><strong>Teams:</strong> if you join or start a team, your teammates can see your name, Bluesky handle, days completed, streak and total distance. Running solo, you don't appear on anyone's board. Anyone with a team's invite link can join that team. You can leave a team, or hide yourself from team boards, anytime.</p>
+      <p><strong>Organizer overview:</strong> the calendar's creator (@${esc(HOST_HANDLE)}) can see a summary of all participants: names, handles, teams, days completed and distance.</p>
       <p>Photos stay on your device. One only leaves it if you choose <em>Post to Bluesky</em> or share it yourself.</p>
       ${stravaEnabled() ? `<h4>Strava (optional)</h4>
       <p>If you connect Strava, the calendar only <em>reads</em> your runs and walks for the door you're opening, and only when you tap <em>Import from Strava</em>. Your Strava login stays on this device. You can disconnect anytime in Settings.</p>` : ''}
@@ -214,8 +234,11 @@ function renderApp() {
     ${lights()}
     <main class="wrap">
       <header class="top">
-        <a class="handle" href="https://bsky.app/profile/${esc(HOST_HANDLE)}" target="_blank" rel="noopener">@${esc(HOST_HANDLE)}</a>
-        <button class="gear" aria-label="Settings">⚙️</button>
+        <span class="handle">🎄 Running Advent Calendar</span>
+        <span class="top-btns">
+          ${isAdmin() ? '<button class="admin-btn">Admin</button>' : ''}
+          <button class="gear" aria-label="Settings">⚙️</button>
+        </span>
       </header>
       <h1 class="hello">${esc(greeting)} 🎄</h1>
       ${hero(today)}
@@ -225,18 +248,18 @@ function renderApp() {
         <div><b>${s.streak}${s.streak >= 3 ? '🔥' : ''}</b><span>Day streak</span></div>
         <div><b>${fmtDist(toUnits(s.meters, u), u, false)}<small>${u}</small></b><span>Total ${u === 'mi' ? 'miles' : 'km'}</span></div>
       </section>` : ''}
-      <button class="btn btn-green invite"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z"/></svg> Invite a friend</button>
+      <button class="btn btn-green invite">${SEND_ICON} ${currentTeam() ? `Invite to ${esc(teamLabel(currentTeam()!))}` : 'Invite a friend'}</button>
       <h2 class="section">${today === 0 ? 'Preview' : 'Your doors'}</h2>
       <div class="grid">${LAYOUT.map(([d, size]) => door(d, size, today)).join('')}</div>
       <section class="board" aria-labelledby="board-h">
-        <h2 class="section" id="board-h">Member board</h2>
-        <p class="board-sub">Everyone who's joined. No rankings, just cheering each other on. 💛</p>
-        <div class="board-list"><div class="board-loading"><span class="spinner"></span> Gathering the crew…</div></div>
+        <h2 class="section" id="board-h">${(profile?.teams ?? []).length > 1 ? 'Your teams' : (profile?.teams ?? []).length ? 'Your team' : 'Teams'}</h2>
+        <div class="team-area"></div>
       </section>
       ${footer()}
     </main>`
 
   $('.gear').addEventListener('click', openSettings)
+  document.querySelector('.admin-btn')?.addEventListener('click', openAdmin)
   $('.invite').addEventListener('click', invite)
   document.querySelectorAll<HTMLElement>('.door').forEach((el) =>
     el.addEventListener('click', () => openDoor(Number(el.dataset.day))),
@@ -244,7 +267,8 @@ function renderApp() {
   document.querySelector('[data-open-today]')?.addEventListener('click', () => openDoor(today))
   document.querySelector('[data-share-today]')?.addEventListener('click', () => openShare(today))
   bindCommon()
-  renderBoard()
+  renderTeams()
+  maybeAcceptInvite()
 
   clearInterval(tick)
   tick = window.setInterval(() => {
@@ -331,9 +355,14 @@ function door(day: number, size: string, today: number) {
   </button>`
 }
 
+const SEND_ICON = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z"/></svg>`
+const siteUrl = () => location.origin + import.meta.env.BASE_URL
+
 async function invite() {
-  const url = location.origin + import.meta.env.BASE_URL
-  const text = `I'm doing the @${HOST_HANDLE} Running Advent Calendar: 24 days, 24 runs or walks: 1–5 miles on weekdays, long ones on weekends. Join me! 🎄 #${HASHTAG}`
+  const t = currentTeam()
+  if (t) return inviteToTeam(t)
+  const url = siteUrl()
+  const text = `I'm doing the Running Advent Calendar: 24 days, 24 runs or walks, 1–5 miles on weekdays and long ones on weekends. Join me! 🎄 #${HASHTAG}`
   if (navigator.share) {
     try {
       return await navigator.share({ title: 'Running Advent Calendar', text, url })
@@ -344,33 +373,95 @@ async function invite() {
   open(`https://bsky.app/intent/compose?text=${encodeURIComponent(`${text}\n${url}`)}`, '_blank')
 }
 
-// ── member board ──
+// ── teams ──
+const teamInfo = new Map<string, Team | null>()
 let members: Member[] | null = null
 let membersAt = 0
 let membersLoading = false
 let membersError = false
 
+const teamLabel = (uri: string) => {
+  const t = teamInfo.get(uri)
+  return t ? `${t.emoji} ${t.name}` : 'your team'
+}
+
+function currentTeam(): string | null {
+  const teams = profile?.teams ?? []
+  if (!teams.length) return null
+  const saved = localStorage.getItem(TEAM_KEY)
+  return saved && teams.includes(saved) ? saved : teams[0]
+}
+
+async function getTeam(uri: string): Promise<Team | null> {
+  if (teamInfo.has(uri)) return teamInfo.get(uri)!
+  let t: Team | null = null
+  if (isDemo && session) {
+    const [, , did, collection, rkey] = uri.split('/')
+    t = await session.agent.com.atproto.repo.getRecord({ repo: did, collection, rkey }).then((r) => r.data.value as unknown as Team).catch(() => null)
+  } else {
+    t = await loadTeam(uri)
+  }
+  teamInfo.set(uri, t)
+  return t
+}
+
 function selfMember(): Member | null {
   if (profile?.showOnBoard === false || !session) return null
   const s = stats(days)
   const prev = members?.find((m) => m.isYou)
-  return { did: session.did, handle: myHandle || prev?.handle || '', name: profile?.name || 'You', avatar: prev?.avatar, doors: s.doors, streak: s.streak, meters: s.meters, isYou: true }
+  return {
+    did: session.did, handle: myHandle || prev?.handle || '', name: profile?.name || 'You', avatar: prev?.avatar,
+    doors: s.doors, streak: s.streak, meters: s.meters, isYou: true, teams: profile?.teams ?? [],
+  }
 }
 
-async function renderBoard() {
-  const box = document.querySelector<HTMLElement>('.board-list')
-  if (!box) return
-  if (members) box.innerHTML = boardHtml()
+async function renderTeams() {
+  const area = document.querySelector<HTMLElement>('.team-area')
+  if (!area) return
+  const teams = profile?.teams ?? []
+  if (!teams.length) {
+    area.innerHTML = `<div class="card solo">
+      <p class="big-emoji">🏃</p>
+      <h3>Running solo</h3>
+      <p>Totally great! Want company? Start a team and send the invite link to friends. Or, if someone sent you a link, just open it to join their team.</p>
+      <button class="btn btn-green" data-new-team>Start a team</button>
+    </div>`
+    $('[data-new-team]', area).addEventListener('click', openNewTeam)
+    return
+  }
+  await Promise.all(teams.map(getTeam))
+  const sel = currentTeam()!
+  const chips = teams.length > 1 || true
+    ? `<div class="team-chips" role="tablist">${teams
+        .map((u) => `<button role="tab" aria-selected="${u === sel}" class="chip${u === sel ? ' on' : ''}" data-team="${esc(u)}">${esc(teamLabel(u))}</button>`)
+        .join('')}<button class="chip add" data-new-team aria-label="Start another team">＋ New team</button></div>`
+    : ''
+  area.innerHTML = `${chips}
+    <p class="board-sub">No rankings, just cheering each other on. 💛</p>
+    <div class="board-list">${members ? boardHtml(sel) : '<div class="board-loading"><span class="spinner"></span> Gathering the crew…</div>'}</div>
+    <div class="team-actions">
+      <button class="btn btn-ghost" data-invite-team>${SEND_ICON} Invite to ${esc(teamLabel(sel))}</button>
+      <button class="link" data-leave-team>Leave ${esc(teamLabel(sel))}</button>
+    </div>`
+  area.querySelectorAll<HTMLElement>('[data-team]').forEach((b) =>
+    b.addEventListener('click', () => {
+      localStorage.setItem(TEAM_KEY, b.dataset.team!)
+      renderApp()
+    }),
+  )
+  area.querySelector('[data-new-team]')?.addEventListener('click', openNewTeam)
+  $('[data-invite-team]', area).addEventListener('click', () => inviteToTeam(sel))
+  $<HTMLButtonElement>('[data-leave-team]', area).addEventListener('click', (e) => leaveTeam(sel, e.currentTarget as HTMLButtonElement))
+
   if (membersLoading || (members && Date.now() - membersAt < 120_000)) return
   membersLoading = true
   try {
-    members =
-      import.meta.env.DEV && new URLSearchParams(location.search).has('demo')
-        ? (await import('./demo')).demoMembers(session!.did)
-        : await loadMembers({ did: session!.did, profile: profile!, days })
+    members = isDemo
+      ? (await import('./demo')).demoMembers(session!.did, profile!.teams ?? [])
+      : await loadMembers({ did: session!.did, profile: profile!, days })
     membersError = false
   } catch (e) {
-    console.error('member board', e)
+    console.error('team board', e)
     membersError = true
     members ??= []
   } finally {
@@ -378,13 +469,13 @@ async function renderBoard() {
     membersLoading = false
   }
   const fresh = document.querySelector<HTMLElement>('.board-list')
-  if (fresh) fresh.innerHTML = boardHtml()
+  if (fresh) fresh.innerHTML = boardHtml(currentTeam()!)
 }
 
-function boardHtml() {
+function boardHtml(team: string) {
   const u = units()
   const me = selfMember()
-  const list = [...(me ? [me] : []), ...(members ?? []).filter((m) => !m.isYou)]
+  const list = [...(me ? [me] : []), ...(members ?? []).filter((m) => !m.isYou && m.teams.includes(team))]
   const count = list.length
   const rows = list
     .map((m) => {
@@ -404,9 +495,214 @@ function boardHtml() {
     .join('')
   return `
     <div class="board-head"><span>${count} ${count === 1 ? 'runner' : 'runners'}</span><span class="c">Streak</span><span class="c">Days</span><span class="c">${u === 'mi' ? 'Miles' : 'Km'}</span></div>
-    <ul>${rows || '<li class="member empty">Be the first to join!</li>'}</ul>
+    <ul>${rows}</ul>
+    ${count <= 1 ? '<p class="small board-note">Just you so far. Send the invite link to bring friends in! 👇</p>' : ''}
     <p class="small board-note">✓ = on a streak (2+ days in a row)${membersError ? ' · Couldn’t reach everyone right now. Showing what we could.' : ''}</p>
-    ${profile?.showOnBoard === false ? '<p class="small board-note">You’re hidden from the board. Change it in Settings ⚙️</p>' : ''}`
+    ${profile?.showOnBoard === false ? '<p class="small board-note">You’re hidden from team boards. Change it in Settings ⚙️</p>' : ''}`
+}
+
+const TEAM_EMOJI = ['🏃', '🎄', '⛄', '🦌', '🍪', '🔥', '⭐', '🏔️', '🐧', '☕']
+
+function openNewTeam() {
+  openSheet(`
+    <h2>Start a team</h2>
+    <p class="small">Pick a name, then send the invite link to friends. Anyone with the link can join.</p>
+    <form class="new-team" novalidate>
+      <label class="field"><span>Team name</span><input name="name" maxlength="40" placeholder="e.g. Hill Hustlers" required /></label>
+      <div class="field"><span>Pick an emoji</span>
+        <div class="emoji-pick">${TEAM_EMOJI.map((e, i) => `<label><input type="radio" name="emoji" value="${e}" ${i === 0 ? 'checked' : ''}/><span>${e}</span></label>`).join('')}</div>
+      </div>
+      <p class="error" hidden></p>
+      <button class="btn btn-green" type="submit">Create team</button>
+    </form>`,
+    (el) => {
+      const form = $<HTMLFormElement>('form', el)
+      form.addEventListener('submit', (e) => {
+        e.preventDefault()
+        const fd = new FormData(form)
+        const name = String(fd.get('name') ?? '').trim()
+        if (!name) return showErr($('.error', form), 'Give your team a name.')
+        const team: Team = { name, emoji: String(fd.get('emoji') || '🏃'), createdAt: new Date().toISOString() }
+        busy($<HTMLButtonElement>('button[type=submit]', form), 'Creating…', async () => {
+          const uri = await createTeam(session!.agent, session!.did, team)
+          teamInfo.set(uri, team)
+          await setTeams([...(profile!.teams ?? []), uri])
+          localStorage.setItem(TEAM_KEY, uri)
+          renderApp()
+          inviteToTeam(uri, true)
+        })
+      })
+    })
+}
+
+async function setTeams(teams: string[]) {
+  const next: Profile = { ...profile!, teams: [...new Set(teams)] }
+  await saveProfile(session!.agent, session!.did, next)
+  profile = next
+  members = null // reload boards with the new team list
+  membersAt = 0
+}
+
+function inviteToTeam(uri: string, justCreated = false) {
+  const link = `${siteUrl()}?team=${encodeURIComponent(teamCode(uri))}`
+  const label = teamLabel(uri)
+  const text = `Join my team ${label} in the Running Advent Calendar! 24 days, 24 runs or walks. 🎄 #${HASHTAG}`
+  openSheet(`
+    ${justCreated ? `<p class="eyebrow">Team created 🎉</p>` : ''}
+    <h2>Invite to ${esc(label)}</h2>
+    <p class="small">Anyone who opens this link and signs in joins the team.</p>
+    <label class="field"><span>Invite link</span><input class="link-box" readonly value="${esc(link)}" /></label>
+    <button class="btn btn-green" data-share-link>${SEND_ICON} Share invite</button>
+    <button class="btn btn-blue" data-post-link>Post it on Bluesky 🦋</button>
+    <button class="btn btn-ghost" data-copy-link>Copy link</button>`,
+    (el) => {
+      const box = $<HTMLInputElement>('.link-box', el)
+      box.addEventListener('focus', () => box.select())
+      $('[data-copy-link]', el).addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(link)
+          toast('Invite link copied 📋')
+        } catch {
+          box.select()
+        }
+      })
+      $('[data-post-link]', el).addEventListener('click', () =>
+        open(`https://bsky.app/intent/compose?text=${encodeURIComponent(`${text}\n${link}`)}`, '_blank'),
+      )
+      const shareBtn = $<HTMLButtonElement>('[data-share-link]', el)
+      if (!navigator.share) shareBtn.hidden = true
+      shareBtn.addEventListener('click', () => navigator.share({ title: `Join ${label}`, text, url: link }).catch(() => {}))
+    })
+}
+
+async function leaveTeam(uri: string, btn: HTMLButtonElement) {
+  if (!confirm(`Leave ${teamLabel(uri)}? You can rejoin anytime with the invite link.`)) return
+  await busy(btn, 'Leaving…', async () => {
+    await setTeams((profile!.teams ?? []).filter((t) => t !== uri))
+    if (localStorage.getItem(TEAM_KEY) === uri) localStorage.removeItem(TEAM_KEY)
+    renderApp()
+    toast('You left the team')
+  })
+}
+
+/** ?team=… links are remembered (so they survive the Bluesky sign-in round trip) and offered once signed in. */
+function captureInvite() {
+  const params = new URLSearchParams(location.search)
+  const code = params.get('team')
+  if (!code) return
+  const uri = teamUri(code)
+  if (uri) localStorage.setItem(INVITE_KEY, uri)
+  params.delete('team')
+  const q = params.toString()
+  history.replaceState(null, '', location.pathname + (q ? `?${q}` : '') + location.hash)
+}
+
+async function maybeAcceptInvite() {
+  const uri = localStorage.getItem(INVITE_KEY)
+  if (!uri || !session || document.querySelector('.sheet-wrap')) return
+  localStorage.removeItem(INVITE_KEY)
+  if ((profile?.teams ?? []).includes(uri)) {
+    localStorage.setItem(TEAM_KEY, uri)
+    return toast(`You're already on ${teamLabel(uri)} 👍`)
+  }
+  const team = await getTeam(uri)
+  if (!team) return toast('That team invite link doesn’t work anymore.', 'err')
+  openSheet(`
+    <p class="eyebrow">Team invite</p>
+    <h2>Join ${esc(team.emoji)} ${esc(team.name)}?</h2>
+    <p>Your teammates will see your name, days completed, streak and distance. You can leave anytime.</p>
+    <button class="btn btn-green" data-join>Join the team</button>
+    <button class="btn btn-ghost" data-close>Not now</button>`,
+    (el) => {
+      $<HTMLButtonElement>('[data-join]', el).addEventListener('click', (e) =>
+        busy(e.currentTarget as HTMLButtonElement, 'Joining…', async () => {
+          await setTeams([...(profile!.teams ?? []), uri])
+          localStorage.setItem(TEAM_KEY, uri)
+          closeSheet()
+          renderApp()
+          toast(`Welcome to ${team.emoji} ${team.name}! 🎉`)
+        }),
+      )
+    })
+}
+
+// ── admin overview (creator only) ──
+const isAdmin = () =>
+  ADMIN_HANDLES.map((h) => h.toLowerCase()).includes(myHandle.toLowerCase()) ||
+  (isDemo && new URLSearchParams(location.search).has('demo-admin'))
+
+async function openAdmin() {
+  openSheet(`<p class="eyebrow">Admin · only you see this button</p><h2>Everyone</h2>
+    <div class="admin-body"><div class="board-loading"><span class="spinner"></span> Counting everyone…</div></div>`,
+    async (el) => {
+      const body = $('.admin-body', el)
+      let everyone: Member[]
+      try {
+        everyone = isDemo
+          ? (await import('./demo')).demoEveryone(session!.did, profile!.teams ?? [])
+          : await loadEveryone(session!.did)
+      } catch (e) {
+        console.error(e)
+        body.innerHTML = '<p class="error">Couldn’t load participants right now. Try again in a minute.</p>'
+        return
+      }
+      const allTeams = [...new Set(everyone.flatMap((m) => m.teams))]
+      await Promise.all(allTeams.map(getTeam))
+      const u = units()
+      const dist = (m: number) => fmtDist(Math.round(toUnits(m, u) * 10) / 10, u, false)
+      const total = (f: (m: Member) => number, list = everyone) => list.reduce((n, m) => n + f(m), 0)
+      const solo = everyone.filter((m) => !m.teams.length)
+      const teamRows = allTeams
+        .map((t) => ({ t, list: everyone.filter((m) => m.teams.includes(t)) }))
+        .sort((a, b) => b.list.length - a.list.length || teamLabel(a.t).localeCompare(teamLabel(b.t)))
+      const label = (t: string) => (teamInfo.get(t) ? teamLabel(t) : 'Deleted team')
+
+      body.innerHTML = `
+        <div class="admin-tiles">
+          <div><b>${everyone.length}</b><span>Participants</span></div>
+          <div><b>${everyone.length - solo.length}</b><span>On a team</span></div>
+          <div><b>${solo.length}</b><span>Solo</span></div>
+          <div><b>${allTeams.length}</b><span>Teams</span></div>
+          <div><b>${total((m) => m.doors)}</b><span>Doors opened</span></div>
+          <div><b>${dist(total((m) => m.meters))}</b><span>Total ${u === 'mi' ? 'miles' : 'km'}</span></div>
+        </div>
+        <h3 class="admin-h">Teams</h3>
+        <div class="admin-table-wrap"><table class="admin-table">
+          <thead><tr><th>Team</th><th>Members</th><th>Doors</th><th>${u}</th></tr></thead>
+          <tbody>${teamRows.map(({ t, list }) => `<tr><td>${esc(label(t))}</td><td>${list.length}</td><td>${total((m) => m.doors, list)}</td><td>${dist(total((m) => m.meters, list))}</td></tr>`).join('')}
+          <tr class="muted"><td>Solo (no team)</td><td>${solo.length}</td><td>${total((m) => m.doors, solo)}</td><td>${dist(total((m) => m.meters, solo))}</td></tr></tbody>
+        </table></div>
+        <h3 class="admin-h">Participants</h3>
+        <input class="admin-search" type="search" placeholder="Search name, handle or team" />
+        <div class="admin-table-wrap"><table class="admin-table people">
+          <thead><tr><th>Name</th><th>Teams</th><th>Days</th><th>${u}</th><th>Streak</th></tr></thead>
+          <tbody>${everyone
+            .map((m) => `<tr data-q="${esc((m.name + ' ' + m.handle + ' ' + m.teams.map(label).join(' ')).toLowerCase())}">
+              <td><b>${esc(m.name)}</b>${m.handle ? `<br/><a href="https://bsky.app/profile/${esc(m.handle)}" target="_blank" rel="noopener">@${esc(m.handle)}</a>` : ''}</td>
+              <td>${m.teams.length ? m.teams.map((t) => esc(label(t))).join('<br/>') : '<span class="muted">Solo</span>'}</td>
+              <td>${m.doors}</td><td>${dist(m.meters)}</td><td>${m.streak >= 2 ? `✓ ${m.streak}` : '–'}</td></tr>`)
+            .join('')}</tbody>
+        </table></div>
+        <button class="btn btn-ghost" data-csv>Download CSV</button>
+        <p class="small">Includes everyone with a calendar profile, even people who hide from team boards. Updated when you open this.</p>`
+
+      const search = $<HTMLInputElement>('.admin-search', body)
+      search.addEventListener('input', () => {
+        const q = search.value.trim().toLowerCase()
+        body.querySelectorAll<HTMLElement>('.people tbody tr').forEach((tr) => (tr.hidden = !!q && !tr.dataset.q!.includes(q)))
+      })
+      $('[data-csv]', body).addEventListener('click', () => {
+        const cell = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`
+        const lines = [
+          ['Name', 'Handle', 'Teams', 'Days completed', `Total ${u}`, 'Current streak'].map(cell).join(','),
+          ...everyone.map((m) => [m.name, m.handle ? '@' + m.handle : '', m.teams.map(label).join('; ') || 'Solo', m.doors, dist(m.meters), m.streak].map(cell).join(',')),
+        ]
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }))
+        a.download = `running-advent-participants-${new Date().toISOString().slice(0, 10)}.csv`
+        a.click()
+      })
+    })
 }
 
 // ── door sheet ──
@@ -574,7 +870,8 @@ function openShare(day: number, justOpened = false) {
   const rec = days.get(day)
   if (!rec) return
   const s = stats(days)
-  const input: CardInput = { rec, units: units(), streak: s.streak, doors: s.doors, photo: null }
+  const t = currentTeam()
+  const input: CardInput = { rec, units: units(), streak: s.streak, doors: s.doors, photo: null, team: t && teamInfo.get(t) ? teamLabel(t) : undefined, handle: myHandle }
 
   openSheet(`
     ${justOpened ? `<p class="eyebrow">Door ${day} is open 🎉</p><h2>Nice work! Share it?</h2>` : `<p class="eyebrow">Day ${day}</p><h2>Share your run</h2>`}
@@ -667,7 +964,7 @@ function openSettings() {
       </div>
       <label class="check board-toggle">
         <input type="checkbox" name="board" ${profile?.showOnBoard === false ? '' : 'checked'} />
-        <span>Show me on the Member board<br/><small>Others see your name, days completed, streak and distance.</small></span>
+        <span>Show me on my team boards<br/><small>Teammates see your name, days completed, streak and distance.</small></span>
       </label>
       <button class="btn btn-green" type="submit">Save</button>
       ${stravaEnabled() ? `<div class="strava-box">
@@ -731,11 +1028,11 @@ function openSettings() {
 async function boot() {
   ambience()
   app.innerHTML = `${lights()}<main class="wrap loading"><div class="spinner big"></div></main>`
+  captureInvite()
   const stravaResult = handleStravaReturn() // must run before Bluesky sign-in reads the URL
   if (stravaResult) setTimeout(() => toast(stravaResult.msg, stravaResult.ok ? 'ok' : 'err'), 600)
   try {
-    session =
-      import.meta.env.DEV && new URLSearchParams(location.search).has('demo')
+    session = isDemo
         ? (await import('./demo')).demoSession()
         : await initSession()
   } catch (e) {
@@ -751,7 +1048,7 @@ async function boot() {
     const [p, d] = await Promise.all([getProfile(session.agent, session.did), listDays(session.agent, session.did)])
     days = d
     profile = p
-    session.agent.getProfile({ actor: session.did }).then(({ data }) => (myHandle = data.handle)).catch(() => {})
+    myHandle = await session.agent.getProfile({ actor: session.did }).then(({ data }) => data.handle).catch(() => '')
     if (!profile) {
       let name = ''
       try {

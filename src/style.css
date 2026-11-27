@@ -127,6 +127,19 @@ h1, h2, h3, .num, .btn, .countdown b, .stats b, .target { font-family: var(--dis
 .seg input:checked + span { background: var(--cream); color: #121a2c; }
 .seg input:focus-visible + span { outline: 2px solid var(--gold); }
 
+/* ── handle typeahead ── */
+.ta-wrap { position: relative; }
+.ta-list {
+  position: absolute; z-index: 20; top: 100%; left: 0; right: 0; margin: 6px 0 0; padding: 6px; list-style: none;
+  background: #161c30; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 18px; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+}
+.ta-list li { display: flex; gap: 12px; align-items: center; padding: 9px 10px; border-radius: 12px; cursor: pointer; }
+.ta-list li:hover, .ta-list li[aria-selected='true'] { background: rgba(244, 195, 77, 0.14); }
+.ta-list img, .ta-av { width: 36px; height: 36px; border-radius: 50%; flex: none; object-fit: cover; display: grid; place-items: center; background: #3a3355; font-weight: 800; }
+.ta-list span:last-child { display: grid; min-width: 0; line-height: 1.25; }
+.ta-list b, .ta-list small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ta-list small { color: var(--muted); font-size: 13px; }
+
 /* ── buttons ── */
 .btn {
   display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;

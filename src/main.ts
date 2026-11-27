@@ -7,6 +7,7 @@ import {
   parseDuration, stats, target, toUnits,
 } from './calendar'
 import { activitiesOn, connectStrava, disconnectStrava, handleStravaReturn, stravaAthlete, stravaConnected, stravaEnabled, type Activity } from './strava'
+import { attachHandleTypeahead } from './typeahead'
 import { loadMembers, type Member } from './members'
 import { defaultPostText, drawCard, graphemeLength, loadPhoto, postToBluesky, postUrl, shareImage, toJpeg, type CardInput } from './share'
 
@@ -117,7 +118,7 @@ function renderLanding(error = '') {
         </ul>
         <label class="field">
           <span>Your Bluesky handle</span>
-          <input name="handle" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="yourname.bsky.social" required />
+          <input name="handle" autocapitalize="none" spellcheck="false" placeholder="Start typing your name or handle" required />
         </label>
         <label class="check">
           <input type="checkbox" name="terms" ${localStorage.getItem(TERMS_KEY) ? 'checked' : ''} />
@@ -136,6 +137,16 @@ function renderLanding(error = '') {
     </main>`
 
   const form = $<HTMLFormElement>('form.join')
+  attachHandleTypeahead(
+    form.elements.namedItem('handle') as HTMLInputElement,
+    import.meta.env.DEV && new URLSearchParams(location.search).has('demo-search')
+      ? async (q) => [
+          { did: 'did:plc:1', handle: 'acastanedalife.bsky.social', displayName: 'Andres Castañeda' },
+          { did: 'did:plc:2', handle: 'andrea-runs.bsky.social', displayName: 'Andrea 🏃‍♀️' },
+          { did: 'did:plc:3', handle: 'andy.bsky.social' },
+        ].filter((a) => (a.handle + (a.displayName ?? '')).toLowerCase().includes(q.toLowerCase().slice(0, 2)))
+      : undefined,
+  )
   form.addEventListener('submit', async (e) => {
     e.preventDefault()
     const handle = (form.elements.namedItem('handle') as HTMLInputElement).value.trim()

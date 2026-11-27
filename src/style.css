@@ -320,6 +320,17 @@ h1, h2, h3, .num, .btn, .countdown b, .stats b, .target { font-family: var(--dis
 .plan-tag { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); color: var(--cream); font-size: 12px; font-weight: 700; vertical-align: 1px; }
 .how { margin: 0 0 14px !important; padding: 10px 14px; border-radius: 14px; background: rgba(63, 183, 232, 0.1); border: 1px solid rgba(63, 183, 232, 0.3); font-size: 15px; line-height: 1.45; }
 
+/* ── preview ── */
+.preview-btn { margin: -6px 0 22px; }
+.hero .preview-btn { margin: 4px 0 0; }
+.section-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.preview-link { margin: 0; color: var(--gold); font-size: 15px; white-space: nowrap; }
+.preview-seg { display: inline-flex; margin: 2px 0 16px; }
+.preview-door { padding: 16px; margin-bottom: 14px; border: 1px dashed rgba(244, 195, 77, 0.45); border-radius: 22px; }
+.preview-door h2 { font-size: 28px; }
+.preview-door input:disabled { opacity: 0.85; }
+.preview-door .preview { max-width: 280px; margin-bottom: 4px; }
+
 /* ── daily quote ── */
 .quote { margin: 4px 0 16px; padding: 12px 16px 12px 18px; border-left: 4px solid var(--red); border-radius: 4px 16px 16px 4px; background: rgba(229, 57, 74, 0.08); }
 .quote blockquote { margin: 0; font-style: italic; font-size: 16px; line-height: 1.45; color: var(--cream); }

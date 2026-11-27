@@ -130,6 +130,7 @@ function renderLanding(error = '') {
       <p class="subtitle">A Movement Advent Calendar</p>
       <p class="credit">made by <a href="https://bsky.app/profile/${esc(HOST_HANDLE)}" target="_blank" rel="noopener">@${esc(HOST_HANDLE)}</a></p>
       <p class="lede">24 days. 24 runs or walks.<br/>Two plans: Easy going or Intermediate.</p>
+      <button class="btn btn-ghost preview-btn" type="button" data-preview>👀 Preview an open door</button>
       <div class="invite-banner" hidden></div>
       <form class="card join" novalidate>
         <h3>A few things to know:</h3>
@@ -216,6 +217,7 @@ function footer() {
 }
 
 function bindCommon() {
+  document.querySelectorAll('[data-preview]').forEach((b) => b.addEventListener('click', () => openPreview()))
   document.querySelectorAll('[data-info]').forEach((a) =>
     a.addEventListener('click', (e) => {
       e.preventDefault()
@@ -273,7 +275,7 @@ function renderApp() {
         <div><b>${fmtDist(toUnits(s.meters, u), u, false)}<small>${u}</small></b><span>Total ${u === 'mi' ? 'miles' : 'km'}</span></div>
       </section>` : ''}
       <button class="btn btn-green invite">${SEND_ICON} ${currentTeam() ? `Invite to ${esc(teamLabel(currentTeam()!))}` : 'Invite a friend'}</button>
-      <h2 class="section">${today === 0 ? 'Preview' : 'Your doors'}</h2>
+      <div class="section-row"><h2 class="section">${today === 0 ? 'Preview' : 'Your doors'}</h2><button class="link preview-link" type="button" data-preview>👀 Example door</button></div>
       <div class="grid">${LAYOUT.map(([d, size]) => door(d, size, today)).join('')}</div>
       <section class="board" aria-labelledby="board-h">
         <h2 class="section" id="board-h">${myTeams().length > 1 ? 'Your teams' : myTeams().length ? 'Your team' : 'Teams'}</h2>
@@ -309,6 +311,7 @@ function hero(today: number) {
       <p class="center">The first door opens in</p>
       ${countdownBoxes(true)}
       <p class="center small">December 1 at midnight, your time.</p>
+      <button class="btn btn-ghost preview-btn" type="button" data-preview>👀 Preview an open door</button>
     </section>`
   }
   if (today > 24) {
@@ -894,6 +897,49 @@ function openDoor(day: number) {
       })
   }
   openLog(day)
+}
+
+// ── example door (preview) ──
+const PREVIEW_DAY = 15 // a weekday: easy run on Easy going, hill repeats on Intermediate
+
+function openPreview(plan: Plan = profile ? currentPlan() : 'easy') {
+  const prev = getPlan()
+  setPlan(plan)
+  const day = PREVIEW_DAY
+  const t = target(day)
+  const u = units()
+  const html = `
+    <p class="eyebrow">Example door · not a real day</p>
+    <div class="seg preview-seg" role="radiogroup" aria-label="Plan">
+      ${(Object.keys(PLANS) as Plan[]).map((p) => `<label><input type="radio" name="pv" value="${p}" ${p === plan ? 'checked' : ''}/><span>${PLANS[p].label}</span></label>`).join('')}
+    </div>
+    <div class="preview-door">
+      <p class="eyebrow">Day ${day} · ${monthDay(day)}${kind(day)}</p>
+      <h2>${esc(t.title)}</h2>
+      ${quoteHtml(day)}
+      <p class="target-chip">Suggested: <b>${fmtDist(milesToUnits(t.miles, u), u)}</b> <span class="plan-tag">${PLANS[plan].label}</span></p>
+      ${howHtml(day)}
+      <div class="row">
+        <label class="field"><span>Your ${u === 'mi' ? 'miles' : 'km'}</span><input disabled value="${fmtDist(milesToUnits(t.miles, u), u, false)}" /></label>
+        <label class="field"><span>Time <em>(optional)</em></span><input disabled value="${fmtDuration(Math.round(t.miles * 600))}" /></label>
+      </div>
+      <p class="small">Log what you actually did. More or less is all good! Then you get a share card like this:</p>
+      <div class="preview"><canvas aria-label="Example share image"></canvas></div>
+    </div>
+    <button class="btn btn-ghost" data-close>Got it</button>`
+  setPlan(prev)
+  openSheet(html, async (el) => {
+    el.querySelectorAll<HTMLInputElement>('input[name=pv]').forEach((r) =>
+      r.addEventListener('change', () => openPreview(r.value as Plan)),
+    )
+    setPlan(plan)
+    const s = { streak: 5, doors: 12 }
+    await drawCard($<HTMLCanvasElement>('canvas', el), {
+      rec: { year: YEAR, day, distanceMeters: Math.round(metersFrom(milesToUnits(t.miles, u), u)), durationSeconds: Math.round(t.miles * 600), completedAt: '' },
+      units: u, streak: s.streak, doors: s.doors, photo: null, handle: 'you.bsky.social',
+    })
+    setPlan(prev)
+  })
 }
 
 function openLog(day: number) {

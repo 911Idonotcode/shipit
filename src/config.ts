@@ -13,28 +13,29 @@ export const YEAR = 2026
 
 /**
  * The 24 doors. Distances are in miles (km is converted automatically).
- * Change titles/distances freely — keep it to days 1–24.
+ * Weekdays stay between 1 and 5 miles; Saturdays and Sundays are the long
+ * runs/walks (Dec 5–6, 12–13, 19–20 in 2026). Change titles/distances freely.
  */
 export const SCHEDULE: { day: number; miles: number; title: string }[] = [
   { day: 1, miles: 1, title: 'First door jitters' },
   { day: 2, miles: 2, title: 'Cocoa cruise' },
   { day: 3, miles: 1.5, title: 'Twinkle trot' },
   { day: 4, miles: 3, title: 'Sweater weather' },
-  { day: 5, miles: 2, title: 'Gingerbread shuffle' },
-  { day: 6, miles: 4, title: 'Weekend wander' },
+  { day: 5, miles: 5, title: 'Gingerbread long run' },
+  { day: 6, miles: 4, title: 'Sunday long walk' },
   { day: 7, miles: 1, title: 'Easy elf miles' },
   { day: 8, miles: 2.5, title: 'Peppermint pace' },
   { day: 9, miles: 3, title: 'Frosty fartlek' },
   { day: 10, miles: 1.5, title: 'Mitten mile-and-a-half' },
-  { day: 11, miles: 4, title: 'Lights tour' },
-  { day: 12, miles: 2, title: 'Halfway-ish hustle' },
-  { day: 13, miles: 5, title: 'The big one (so far)' },
+  { day: 11, miles: 4, title: 'Friday night lights' },
+  { day: 12, miles: 6, title: 'Lights tour long run' },
+  { day: 13, miles: 5, title: 'Sunday snow globe loop' },
   { day: 14, miles: 1, title: 'Recovery jingle' },
-  { day: 15, miles: 3, title: 'Snow globe loop' },
+  { day: 15, miles: 3, title: 'Tinsel tempo' },
   { day: 16, miles: 2, title: 'Candy cane cadence' },
   { day: 17, miles: 3.5, title: 'Reindeer games' },
   { day: 18, miles: 1.5, title: 'Wrap-it-up walk' },
-  { day: 19, miles: 4, title: 'Nutcracker negative split' },
+  { day: 19, miles: 7, title: 'The big one' },
   { day: 20, miles: 6, title: 'Longest night long run' },
   { day: 21, miles: 2, title: 'Solstice shakeout' },
   { day: 22, miles: 3, title: 'Last-minute shopping run' },

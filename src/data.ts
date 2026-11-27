@@ -6,6 +6,8 @@ export type Units = 'mi' | 'km'
 export interface Profile {
   name: string
   units: Units
+  /** Listed on the Member board (default: yes). */
+  showOnBoard?: boolean
   /** User ticked the "own risk / health disclaimer" box. */
   acceptedTerms: boolean
   createdAt: string

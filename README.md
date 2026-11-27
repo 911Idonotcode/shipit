@@ -8,6 +8,7 @@
 - Each opened door is saved as a small record **in the runner's own Bluesky account** (AT Protocol), so runners own their data. *Delete my data* in Settings removes it.
 - After opening a door, runners add a photo. The app overlays their stats (day, distance, time, pace, streak) and lets them **post to Bluesky** in one tap or **share to Instagram** through the phone's share sheet.
 - Personal stats: doors opened, day streak, total miles/km.
+- A friendly **Member board**: everyone who joined, with days completed, total distance and a ✓ for an active streak. Alphabetical, no rankings, and runners can hide themselves in Settings.
 - Optional **Strava import** (see [STRAVA_SETUP.md](STRAVA_SETUP.md)).
 - Hosting is free (GitHub Pages). Nothing runs on a server.
 

@@ -246,6 +246,32 @@ h1, h2, h3, .num, .btn, .countdown b, .stats b, .target { font-family: var(--dis
 .catchup { background: rgba(244, 195, 77, 0.92); color: #1b1b1b; }
 .door.s .done-badge, .door.s .catchup { font-size: 11px; padding: 2px 7px; left: 8%; top: 8%; }
 
+/* ── member board ── */
+.board { margin-top: 8px; }
+.board-sub { margin: -6px 0 14px; color: var(--muted); }
+.board-list { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 6px 4px; }
+.board-loading { display: flex; gap: 10px; align-items: center; justify-content: center; padding: 22px; color: var(--muted); }
+.board-head, .member { display: grid; grid-template-columns: 40px minmax(0, 1fr) 52px 44px 54px; gap: 8px; align-items: center; padding: 8px 10px; }
+.board-head { grid-template-columns: minmax(0, 1fr) 52px 44px 54px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; color: var(--muted); }
+.board ul { list-style: none; margin: 0; padding: 0; }
+.member { border-radius: 16px; }
+.member + .member { border-top: 1px solid var(--line); border-radius: 0; }
+.member.you { background: rgba(244, 195, 77, 0.1); border-radius: 16px; }
+.member.you + .member { border-top: 0; }
+.member.empty { display: block; text-align: center; color: var(--muted); padding: 18px; }
+.av { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; background: #3a3355; font-family: var(--display); font-weight: 800; color: var(--cream); }
+.who { display: grid; min-width: 0; line-height: 1.25; }
+.who b, .who a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.who em { font-style: normal; color: var(--gold); font-weight: 600; font-size: 14px; }
+.who a { font-size: 13px; color: var(--muted); text-decoration: none; }
+.c { text-align: center; font-family: var(--display); }
+.c b { font-size: 19px; }
+.tick { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--green); color: #fff; font-style: normal; font-weight: 800; box-shadow: 0 0 12px rgba(21, 164, 108, 0.45); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.board-note { text-align: center; margin: 6px 8px 10px; }
+.board-toggle { margin: 2px 0 16px; }
+.board-toggle small { color: var(--muted); font-size: 13px; }
+
 .foot { margin-top: 34px; text-align: center; color: var(--muted); font-size: 14px; line-height: 1.7; }
 
 /* ── bottom sheet ── */

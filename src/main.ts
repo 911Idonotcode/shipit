@@ -1,5 +1,5 @@
 import './style.css'
-import { ADMIN_HANDLES, APP_NAME, HASHTAG, PLANS, WORKOUT_LABEL, type Plan, HOST_HANDLE, LAYOUT, YEAR } from './config'
+import { ADMIN_HANDLES, APP_NAME, HASHTAG, PLANS, QUOTES, WORKOUT_LABEL, type Plan, HOST_HANDLE, LAYOUT, YEAR } from './config'
 import { initSession, signIn, signOut, type Session } from './auth'
 import {
   createTeam, deleteAll, deleteDay, effectiveTeams, emptyRoster, getProfile, isRemoved, listDays, rosterSet, saveDay,
@@ -42,6 +42,10 @@ const units = (): Units => profile?.units ?? 'mi'
 const monthDay = (d: number) => `Dec ${d}`
 const isWeekend = (d: number) => [0, 6].includes(new Date(YEAR, 11, d).getDay())
 const kind = (d: number) => (target(d).kind === 'easy' ? '' : ` · ${WORKOUT_LABEL[target(d).kind]}`)
+const quoteHtml = (d: number) => {
+  const q = QUOTES[d]
+  return q ? `<figure class="quote"><blockquote>“${esc(q.text)}”</blockquote><figcaption>— ${esc(q.who)}, <cite>${esc(q.film)}</cite></figcaption></figure>` : ''
+}
 const howHtml = (d: number) => (target(d).how ? `<p class="how">📝 ${esc(target(d).how!)}</p>` : '')
 const planOf = (uri: string): Plan => teamInfo.get(uri)?.level ?? 'easy'
 /** Suggestions follow the selected team's plan, or your own plan when solo. */
@@ -329,6 +333,7 @@ function hero(today: number) {
   return `<section class="card hero stripe">
     <p class="eyebrow">Today's door · ${monthDay(today)}${kind(today)}</p>
     <h3>${esc(t.title)}</h3>
+    ${quoteHtml(today)}
     <p class="target">${fmtDist(milesToUnits(t.miles, u), u)}</p>
     ${howHtml(today)}
     <button class="btn btn-red" data-open-today>Open door ${today} 🎁</button>
@@ -862,6 +867,7 @@ function openDoor(day: number) {
     return openSheet(`
       <p class="eyebrow">Day ${day} · ${monthDay(day)} · done ✅</p>
       <h2>${esc(t.title)}</h2>
+      ${quoteHtml(day)}
       <div class="stats in-sheet">
         <div><b>${fmtDist(toUnits(rec.distanceMeters, u), u, false)}<small>${u}</small></b><span>Distance</span></div>
         <div><b>${rec.durationSeconds ? fmtDuration(rec.durationSeconds) : '–'}</b><span>Time</span></div>
@@ -897,6 +903,7 @@ function openLog(day: number) {
   openSheet(`
     <p class="eyebrow">Day ${day} · ${monthDay(day)}${kind(day)}${day < currentDay() ? ' · catching up' : ''}</p>
     <h2>${esc(t.title)}</h2>
+    ${quoteHtml(day)}
     <p class="target-chip">Suggested: <b>${fmtDist(milesToUnits(t.miles, u), u)}</b>${t.kind === 'long' ? ' · run or walk' : ''} <span class="plan-tag">${PLANS[getPlan()].label}</span></p>
     ${howHtml(day)}
     <p class="small">We've filled in the suggestion. Did more or less? Just change it. It's all good. 💛</p>

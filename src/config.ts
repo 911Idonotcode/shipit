@@ -97,6 +97,36 @@ export const SCHEDULES: Record<Plan, DayPlan[]> = {
   ],
 }
 
+/** A line from Elf (2003) or How the Grinch Stole Christmas (2000) for each door. */
+const ELF = 'Elf (2003)'
+const GRINCH = 'How the Grinch Stole Christmas (2000)'
+export const QUOTES: Record<number, { text: string; who: string; film: string }> = {
+  1: { text: 'The best way to spread Christmas cheer is singing loud for all to hear.', who: 'Buddy', film: ELF },
+  2: { text: '4:00, wallow in self-pity. 4:30, stare into the abyss. 5:00, solve world hunger, tell no one. 5:30, Jazzercise.', who: 'The Grinch', film: GRINCH },
+  3: { text: "I just like to smile, smiling's my favorite.", who: 'Buddy', film: ELF },
+  4: { text: "Am I just eating because I'm bored?", who: 'The Grinch', film: GRINCH },
+  5: { text: 'I passed through the seven levels of the Candy Cane Forest, through the sea of swirly-twirly gumdrops, and then I walked through the Lincoln Tunnel.', who: 'Buddy', film: ELF },
+  6: { text: 'We elves try to stick to the four main food groups: candy, candy canes, candy corns and syrup.', who: 'Buddy', film: ELF },
+  7: { text: 'Hate, hate, hate. Hate, hate, hate. Double hate. Loathe entirely!', who: 'The Grinch', film: GRINCH },
+  8: { text: 'Son of a nutcracker!', who: 'Buddy', film: ELF },
+  9: { text: "One man's toxic sludge is another man's potpourri.", who: 'The Grinch', film: GRINCH },
+  10: { text: "Buddy the Elf! What's your favorite color?", who: 'Buddy', film: ELF },
+  11: { text: "Blast this Christmas music! It's joyful and triumphant.", who: 'The Grinch', film: GRINCH },
+  12: { text: "You did it! Congratulations! World's best cup of coffee!", who: 'Buddy', film: ELF },
+  13: { text: 'I like to whisper, too.', who: 'Buddy', film: ELF },
+  14: { text: "It's because I'm green, isn't it?", who: 'The Grinch', film: GRINCH },
+  15: { text: "Francisco. That's fun to say.", who: 'Buddy', film: ELF },
+  16: { text: "He's an angry elf.", who: 'Buddy', film: ELF },
+  17: { text: 'Oh, the Who-manity!', who: 'The Grinch', film: GRINCH },
+  18: { text: "I'm sorry I ruined your lives and crammed 11 cookies into the VCR.", who: 'Buddy', film: ELF },
+  19: { text: 'Bye, Buddy! Hope you find your dad!', who: 'Mr. Narwhal', film: ELF },
+  20: { text: 'You sit on a throne of lies!', who: 'Buddy', film: ELF },
+  21: { text: "I'm a cotton-headed ninny muggins!", who: 'Buddy', film: ELF },
+  22: { text: 'It came without ribbons! It came without tags! It came without packages, boxes or bags!', who: 'The Grinch', film: GRINCH },
+  23: { text: "I'm the Grinch that stole Christmas. And I'm... sorry.", who: 'The Grinch', film: GRINCH },
+  24: { text: "There's room for everyone on the nice list.", who: 'Buddy', film: ELF },
+}
+
 export const WORKOUT_LABEL: Record<Workout, string> = {
   easy: 'Easy run or walk',
   long: 'Saturday long one 🌲',

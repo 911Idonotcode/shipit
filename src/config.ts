@@ -2,8 +2,15 @@
 // Everything you'd want to tweak lives in this file.
 // ─────────────────────────────────────────────────────────────
 
-/** Your Bluesky handle — shown as the calendar's host and tagged on every share. */
+/** Your Bluesky handle — shown as a small "made by" credit. */
 export const HOST_HANDLE = 'acastanedalife.bsky.social'
+
+/**
+ * Bluesky handles that see the Admin overview (everyone, totals, teams).
+ * Note: all calendar records are public on the AT Protocol network, so this
+ * is a convenience view, not a security boundary.
+ */
+export const ADMIN_HANDLES = [HOST_HANDLE]
 
 /** Hashtag added to every Bluesky post (without the #). */
 export const HASHTAG = 'runadvent'
@@ -61,6 +68,7 @@ export const LAYOUT: [day: number, size: 's' | 'w' | 'b'][] = [
 const NS = 'io.github.911idonotcode.runadvent'
 export const COLLECTION_DAY = `${NS}.day`
 export const COLLECTION_PROFILE = `${NS}.profile`
+export const COLLECTION_TEAM = `${NS}.team`
 
 export const MI_TO_KM = 1.609344
 

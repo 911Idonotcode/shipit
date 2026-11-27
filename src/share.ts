@@ -1,5 +1,5 @@
 import { RichText, type Agent } from '@atproto/api'
-import { HASHTAG, HOST_HANDLE } from './config'
+import { HASHTAG } from './config'
 import { fmtDist, fmtDuration, fmtPace, target, toUnits } from './calendar'
 import type { DayRecord, Units } from './data'
 
@@ -12,6 +12,10 @@ export interface CardInput {
   streak: number
   doors: number
   photo: ImageBitmap | null
+  /** e.g. "🏔️ Hill Hustlers", shown on the card and in the post. */
+  team?: string
+  /** Runner's own handle, shown when they're not on a team. */
+  handle?: string
 }
 
 const C = {
@@ -189,7 +193,7 @@ export async function drawCard(canvas: HTMLCanvasElement, input: CardInput) {
   // footer
   ctx.fillStyle = C.muted
   ctx.font = '600 30px Figtree'
-  ctx.fillText(`@${HOST_HANDLE}`, 64, H - 62)
+  ctx.fillText(input.team || (input.handle ? `@${input.handle}` : 'Running Advent Calendar'), 64, H - 62, W - 128 - 260)
   ctx.textAlign = 'right'
   ctx.fillStyle = C.gold
   ctx.fillText(`#${HASHTAG}`, W - 64, H - 62)
@@ -235,7 +239,7 @@ export function defaultPostText(input: CardInput): string {
     parts.push(fmtPace(rec.distanceMeters, rec.durationSeconds, units))
   }
   const lines = [
-    `🎁 Day ${rec.day} of the @${HOST_HANDLE} Running Advent Calendar: done!`,
+    `🎁 Day ${rec.day} of the Running Advent Calendar: done!${input.team ? ` Team ${input.team}` : ''}`,
     `🏃 ${parts.join(' · ')}`,
   ]
   if (input.streak > 1) lines.push(`🔥 ${input.streak}-day streak`)

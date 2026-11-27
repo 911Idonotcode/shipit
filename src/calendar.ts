@@ -1,4 +1,4 @@
-import { MI_TO_KM, SCHEDULE, YEAR } from './config'
+import { MI_TO_KM, SCHEDULES, YEAR, type Plan } from './config'
 import type { DayRecord, Units } from './data'
 
 /** "Now", overridable with ?date=2026-12-05 for previewing the calendar. */
@@ -31,7 +31,11 @@ export function doorState(day: number, done: Map<number, DayRecord>, today = cur
   return 'open'
 }
 
-export const target = (day: number) => SCHEDULE.find((s) => s.day === day)!
+/** The plan whose suggestions are showing (team's plan, or your own when solo). */
+let activePlan: Plan = 'easy'
+export const setPlan = (p: Plan) => (activePlan = SCHEDULES[p] ? p : 'easy')
+export const getPlan = () => activePlan
+export const target = (day: number) => SCHEDULES[activePlan].find((s) => s.day === day)!
 
 // ── units & formatting ──
 export const metersFrom = (value: number, units: Units) => value * (units === 'mi' ? MI_TO_KM : 1) * 1000

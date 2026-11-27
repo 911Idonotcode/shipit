@@ -1,13 +1,13 @@
 import './style.css'
-import { ADMIN_HANDLES, APP_NAME, HASHTAG, HOST_HANDLE, LAYOUT, YEAR } from './config'
+import { ADMIN_HANDLES, APP_NAME, HASHTAG, PLANS, WORKOUT_LABEL, type Plan, HOST_HANDLE, LAYOUT, YEAR } from './config'
 import { initSession, signIn, signOut, type Session } from './auth'
 import {
   createTeam, deleteAll, deleteDay, effectiveTeams, emptyRoster, getProfile, isRemoved, listDays, rosterSet, saveDay,
-  saveProfile, saveRoster, teamCode, teamUri, type DayRecord, type Profile, type Roster, type Team, type Units,
+  saveProfile, saveRoster, teamCode, teamUri, updateTeam, type DayRecord, type Profile, type Roster, type Team, type Units,
 } from './data'
 import {
   currentDay, doorOpensAt, doorState, fmtDist, fmtDuration, fmtPace, metersFrom, milesToUnits, now,
-  parseDuration, stats, target, toUnits,
+  getPlan, parseDuration, setPlan, stats, target, toUnits,
 } from './calendar'
 import { activitiesOn, connectStrava, disconnectStrava, handleStravaReturn, stravaAthlete, stravaConnected, stravaEnabled, type Activity } from './strava'
 import { attachHandleTypeahead } from './typeahead'
@@ -41,7 +41,14 @@ const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = 
 const units = (): Units => profile?.units ?? 'mi'
 const monthDay = (d: number) => `Dec ${d}`
 const isWeekend = (d: number) => [0, 6].includes(new Date(YEAR, 11, d).getDay())
-const kind = (d: number) => (isWeekend(d) ? ' · Weekend long one 🌲' : '')
+const kind = (d: number) => (target(d).kind === 'easy' ? '' : ` · ${WORKOUT_LABEL[target(d).kind]}`)
+const howHtml = (d: number) => (target(d).how ? `<p class="how">📝 ${esc(target(d).how!)}</p>` : '')
+const planOf = (uri: string): Plan => teamInfo.get(uri)?.level ?? 'easy'
+/** Suggestions follow the selected team's plan, or your own plan when solo. */
+const currentPlan = (): Plan => {
+  const t = currentTeam()
+  return t ? planOf(t) : (profile?.plan ?? 'easy')
+}
 
 function toast(msg: string, kind: 'ok' | 'err' = 'ok') {
   const el = document.createElement('div')
@@ -117,14 +124,15 @@ function renderLanding(error = '') {
     <main class="wrap landing">
       <h1 class="host">${APP_NAME} ${WREATH}</h1>
       <p class="credit">made by <a href="https://bsky.app/profile/${esc(HOST_HANDLE)}" target="_blank" rel="noopener">@${esc(HOST_HANDLE)}</a></p>
-      <p class="lede">24 days. 24 runs or walks.<br/>1–5 miles on weekdays. Weekends go long.</p>
+      <p class="lede">24 days. 24 runs or walks.<br/>Two plans: Easy going or Intermediate.</p>
       <div class="invite-banner" hidden></div>
       <form class="card join" novalidate>
         <h3>A few things to know:</h3>
         <ul class="facts">
           <li><span>🎄</span>December 1–24, a new door every midnight</li>
-          <li><span>🏃</span>Weekdays: 1–5 miles, a different distance each day</li>
-          <li><span>🌲</span>Saturdays &amp; Sundays are saved for long runs or walks</li>
+          <li><span>🙂</span>Easy going: 1–5 miles on weekdays, 7 on Saturdays</li>
+          <li><span>⚡</span>Intermediate: 2–6 miles on weekdays with hills &amp; intervals, up to 10 on Saturdays</li>
+          <li><span>🌲</span>Saturdays are long-run days. Sundays stay short and change each week.</li>
           <li><span>✍️</span>Log the miles you do. Shorter or longer… it all counts.</li>
           <li><span>⏱️</span>No pace requirements. Run, jog, walk.</li>
           <li><span>🦋</span>Sign in with Bluesky. Your activity lives in your account.</li>
@@ -233,6 +241,7 @@ let tick: number | undefined
 let renderedDay = -1
 
 function renderApp() {
+  setPlan(currentPlan())
   const today = currentDay()
   renderedDay = today
   const s = stats(days, today)
@@ -321,6 +330,7 @@ function hero(today: number) {
     <p class="eyebrow">Today's door · ${monthDay(today)}${kind(today)}</p>
     <h3>${esc(t.title)}</h3>
     <p class="target">${fmtDist(milesToUnits(t.miles, u), u)}</p>
+    ${howHtml(today)}
     <button class="btn btn-red" data-open-today>Open door ${today} 🎁</button>
   </section>`
 }
@@ -447,6 +457,7 @@ async function renderTeams() {
         .join('')}<button class="chip add" data-new-team aria-label="Start another team">＋ New team</button></div>`
     : ''
   area.innerHTML = `${chips}
+    <p class="plan-line">Plan: <b>${PLANS[planOf(sel)].label}</b> · ${PLANS[planOf(sel)].range}${sel.split('/')[2] === session!.did ? ' · <button class="link inline" data-change-plan>Change</button>' : ''}</p>
     <p class="board-sub">No rankings, just cheering each other on. 💛</p>
     <div class="board-list">${members ? boardHtml(sel) : '<div class="board-loading"><span class="spinner"></span> Gathering the crew…</div>'}</div>
     <div class="team-actions">
@@ -460,6 +471,7 @@ async function renderTeams() {
     }),
   )
   area.querySelector('[data-new-team]')?.addEventListener('click', openNewTeam)
+  area.querySelector('[data-change-plan]')?.addEventListener('click', () => openChangePlan(sel))
   $('[data-invite-team]', area).addEventListener('click', () => inviteToTeam(sel))
   $<HTMLButtonElement>('[data-leave-team]', area).addEventListener('click', (e) => leaveTeam(sel, e.currentTarget as HTMLButtonElement))
 
@@ -519,6 +531,7 @@ function openNewTeam() {
     <p class="small">Pick a name, then send the invite link to friends. Anyone with the link can join.</p>
     <form class="new-team" novalidate>
       <label class="field"><span>Team name</span><input name="name" maxlength="40" placeholder="e.g. Hill Hustlers" required /></label>
+      <div class="field"><span>Training plan</span>${planPicker('easy')}</div>
       <div class="field"><span>Pick an emoji</span>
         <div class="emoji-pick">${TEAM_EMOJI.map((e, i) => `<label><input type="radio" name="emoji" value="${e}" ${i === 0 ? 'checked' : ''}/><span>${e}</span></label>`).join('')}</div>
       </div>
@@ -532,7 +545,7 @@ function openNewTeam() {
         const fd = new FormData(form)
         const name = String(fd.get('name') ?? '').trim()
         if (!name) return showErr($('.error', form), 'Give your team a name.')
-        const team: Team = { name, emoji: String(fd.get('emoji') || '🏃'), createdAt: new Date().toISOString() }
+        const team: Team = { name, emoji: String(fd.get('emoji') || '🏃'), level: (fd.get('level') as Plan) || 'easy', createdAt: new Date().toISOString() }
         busy($<HTMLButtonElement>('button[type=submit]', form), 'Creating…', async () => {
           const uri = await createTeam(session!.agent, session!.did, team)
           teamInfo.set(uri, team)
@@ -546,6 +559,41 @@ function openNewTeam() {
 }
 
 /** Join (true) or leave (false) a team, in my own profile record. */
+function planPicker(selected: Plan) {
+  return `<div class="plan-pick">${(Object.keys(PLANS) as Plan[])
+    .map((p) => `<label><input type="radio" name="level" value="${p}" ${p === selected ? 'checked' : ''}/>
+      <span><b>${PLANS[p].label}</b><small>${esc(PLANS[p].blurb)}</small></span></label>`)
+    .join('')}</div>`
+}
+
+function openChangePlan(uri: string) {
+  const team = teamInfo.get(uri)
+  if (!team) return
+  openSheet(`
+    <p class="eyebrow">${esc(team.emoji)} ${esc(team.name)}</p>
+    <h2>Team plan</h2>
+    <form class="change-plan" novalidate>
+      ${planPicker(team.level ?? 'easy')}
+      <p class="small">Everyone on the team sees the new suggestions right away. Doors already opened keep the miles people logged.</p>
+      <button class="btn btn-green" type="submit">Save plan</button>
+    </form>`,
+    (el) => {
+      const form = $<HTMLFormElement>('form', el)
+      form.addEventListener('submit', (e) => {
+        e.preventDefault()
+        const level = (new FormData(form).get('level') as Plan) || 'easy'
+        busy($<HTMLButtonElement>('button[type=submit]', form), 'Saving…', async () => {
+          const next = { ...team, level }
+          await updateTeam(session!.agent, uri, next)
+          teamInfo.set(uri, next)
+          closeSheet()
+          renderApp()
+          toast(`Plan set to ${PLANS[level].label}`)
+        })
+      })
+    })
+}
+
 async function setMembership(uri: string, join: boolean) {
   const teams = profile!.teams ?? []
   const left = profile!.leftTeams ?? []
@@ -633,6 +681,7 @@ async function maybeAcceptInvite() {
   openSheet(`
     <p class="eyebrow">Team invite</p>
     <h2>Join ${esc(team.emoji)} ${esc(team.name)}?</h2>
+    <p class="plan-line">Plan: <b>${PLANS[team.level ?? 'easy'].label}</b> · ${esc(PLANS[team.level ?? 'easy'].blurb)}</p>
     <p>Your teammates will see your name, days completed, streak and distance. You can leave anytime.</p>
     <button class="btn btn-green" data-join>Join the team</button>
     <button class="btn btn-ghost" data-close>Not now</button>`,
@@ -712,9 +761,9 @@ async function openAdmin() {
         </div>
         <h3 class="admin-h">Teams</h3>
         <div class="admin-table-wrap"><table class="admin-table">
-          <thead><tr><th>Team</th><th>Members</th><th>Doors</th><th>${u}</th></tr></thead>
-          <tbody>${teamRows.map(({ t, list }) => `<tr><td>${esc(label(t))}</td><td>${list.length}</td><td>${total((m) => m.doors, list)}</td><td>${dist(total((m) => m.meters, list))}</td></tr>`).join('')}
-          <tr class="muted"><td>Solo (no team)</td><td>${solo.length}</td><td>${total((m) => m.doors, solo)}</td><td>${dist(total((m) => m.meters, solo))}</td></tr></tbody>
+          <thead><tr><th>Team</th><th>Plan</th><th>Members</th><th>Doors</th><th>${u}</th></tr></thead>
+          <tbody>${teamRows.map(({ t, list }) => `<tr><td>${esc(label(t))}</td><td>${PLANS[planOf(t)].label}</td><td>${list.length}</td><td>${total((m) => m.doors, list)}</td><td>${dist(total((m) => m.meters, list))}</td></tr>`).join('')}
+          <tr class="muted"><td>Solo (no team)</td><td>Own choice</td><td>${solo.length}</td><td>${total((m) => m.doors, solo)}</td><td>${dist(total((m) => m.meters, solo))}</td></tr></tbody>
         </table></div>
         <h3 class="admin-h">Participants</h3>
         <input class="admin-search" type="search" placeholder="Search name, handle or team" />
@@ -848,7 +897,8 @@ function openLog(day: number) {
   openSheet(`
     <p class="eyebrow">Day ${day} · ${monthDay(day)}${kind(day)}${day < currentDay() ? ' · catching up' : ''}</p>
     <h2>${esc(t.title)}</h2>
-    <p class="target-chip">Suggested: <b>${fmtDist(milesToUnits(t.miles, u), u)}</b>${isWeekend(day) ? ' · run or walk' : ''}</p>
+    <p class="target-chip">Suggested: <b>${fmtDist(milesToUnits(t.miles, u), u)}</b>${t.kind === 'long' ? ' · run or walk' : ''} <span class="plan-tag">${PLANS[getPlan()].label}</span></p>
+    ${howHtml(day)}
     <p class="small">We've filled in the suggestion. Did more or less? Just change it. It's all good. 💛</p>
     ${stravaEnabled() ? (stravaConnected()
       ? `<button class="btn btn-strava" type="button" data-import>Import from Strava</button><div class="strava-list" hidden></div>`
@@ -1044,6 +1094,7 @@ function openSettings() {
     <h2>Settings</h2>
     <form class="settings" novalidate>
       <label class="field"><span>Name</span><input name="name" maxlength="40" value="${esc(profile?.name ?? '')}" /></label>
+      <div class="field"><span>Your plan when running solo${myTeams().length ? ' <em>(your team’s plan is used while a team is selected)</em>' : ''}</span>${planPicker(profile?.plan ?? 'easy')}</div>
       <div class="field inline"><span>Distance in</span>
         <div class="seg" role="radiogroup">
           <label><input type="radio" name="units" value="mi" ${u === 'mi' ? 'checked' : ''}/><span>Miles</span></label>
@@ -1076,6 +1127,7 @@ function openSettings() {
           ...profile!,
           name: String(fd.get('name') ?? '').trim() || profile!.name,
           units: (fd.get('units') as Units) ?? 'mi',
+          plan: (fd.get('level') as Plan) || 'easy',
           showOnBoard: fd.get('board') === 'on',
         }
         busy($<HTMLButtonElement>('button[type=submit]', form), 'Saving…', async () => {
@@ -1148,6 +1200,7 @@ async function boot() {
       profile = { name, units: 'mi', acceptedTerms: !!localStorage.getItem(TERMS_KEY), createdAt: new Date().toISOString() }
       await saveProfile(session.agent, session.did, profile)
     }
+    await Promise.all(myTeams().map(getTeam)) // team plans decide the suggestions
     renderApp()
   } catch (e) {
     console.error(e)

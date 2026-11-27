@@ -21,6 +21,8 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector<T>(sel)!
 const units = (): Units => profile?.units ?? 'mi'
 const monthDay = (d: number) => `Dec ${d}`
+const isWeekend = (d: number) => [0, 6].includes(new Date(YEAR, 11, d).getDay())
+const kind = (d: number) => (isWeekend(d) ? ' · Weekend long one 🌲' : '')
 
 function toast(msg: string, kind: 'ok' | 'err' = 'ok') {
   const el = document.createElement('div')
@@ -96,12 +98,14 @@ function renderLanding(error = '') {
     <main class="wrap landing">
       <h1 class="host">@${esc(HOST_HANDLE).replace(/\./, '<wbr>.')}</h1>
       <h2 class="title">🎄 Running Advent Calendar</h2>
-      <p class="lede">24 days. 24 runs (or walks).<br/>Anywhere from 1 to 6 miles.</p>
+      <p class="lede">24 days. 24 runs (or walks).<br/>1–5 miles on weekdays. Weekends go long.</p>
       <form class="card join" novalidate>
         <h3>A few things to know:</h3>
         <ul class="facts">
           <li><span>🎄</span>December 1–24, a new door every midnight</li>
-          <li><span>🏃</span>Distances change every day</li>
+          <li><span>🏃</span>Weekdays: 1–5 miles, a different distance each day</li>
+          <li><span>🌲</span>Saturdays &amp; Sundays are saved for long runs or walks</li>
+          <li><span>✍️</span>Log the miles you actually did. Shorter or longer still counts.</li>
           <li><span>⏱️</span>No pace requirements. Run, jog, walk.</li>
           <li><span>🦋</span>Sign in with Bluesky. Your runs live in your account.</li>
           <li><span>📸</span>Share each door to Bluesky or Instagram</li>
@@ -253,7 +257,7 @@ function hero(today: number) {
     </section>`
   }
   return `<section class="card hero stripe">
-    <p class="eyebrow">Today's door · ${monthDay(today)}</p>
+    <p class="eyebrow">Today's door · ${monthDay(today)}${kind(today)}</p>
     <h3>${esc(t.title)}</h3>
     <p class="target">${fmtDist(milesToUnits(t.miles, u), u)}</p>
     <button class="btn btn-red" data-open-today>Open door ${today} 🎁</button>
@@ -302,7 +306,7 @@ function door(day: number, size: string, today: number) {
 
 async function invite() {
   const url = location.origin + import.meta.env.BASE_URL
-  const text = `I'm doing the @${HOST_HANDLE} Running Advent Calendar: 24 days, 24 runs (or walks), 1–6 miles. Join me! 🎄 #${HASHTAG}`
+  const text = `I'm doing the @${HOST_HANDLE} Running Advent Calendar: 24 days, 24 runs (or walks): 1–5 miles on weekdays, long ones on weekends. Join me! 🎄 #${HASHTAG}`
   if (navigator.share) {
     try {
       return await navigator.share({ title: 'Running Advent Calendar', text, url })
@@ -366,9 +370,10 @@ function openLog(day: number) {
   const rec = days.get(day)
   const dist = rec ? toUnits(rec.distanceMeters, u) : milesToUnits(t.miles, u)
   openSheet(`
-    <p class="eyebrow">Day ${day} · ${monthDay(day)}${day < currentDay() ? ' · catching up' : ''}</p>
+    <p class="eyebrow">Day ${day} · ${monthDay(day)}${kind(day)}${day < currentDay() ? ' · catching up' : ''}</p>
     <h2>${esc(t.title)}</h2>
-    <p class="target-chip">Today's distance: <b>${fmtDist(milesToUnits(t.miles, u), u)}</b></p>
+    <p class="target-chip">Suggested distance: <b>${fmtDist(milesToUnits(t.miles, u), u)}</b></p>
+    <p class="small">Enter the distance you actually covered. Any amount counts.</p>
     <form class="log" novalidate>
       <div class="row">
         <label class="field"><span>Distance (${u})</span>

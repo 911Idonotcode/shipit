@@ -1,6 +1,6 @@
 # 🎄 Running Advent Calendar
 
-24 days. 24 runs (or walks). Anywhere from 1 to 6 miles. Hosted by [@acastanedalife.bsky.social](https://bsky.app/profile/acastanedalife.bsky.social).
+24 days. 24 runs (or walks). 1–5 miles on weekdays. Weekends go long. Hosted by [@acastanedalife.bsky.social](https://bsky.app/profile/acastanedalife.bsky.social).
 
 **Live site:** https://911idonotcode.github.io/shipit/
 

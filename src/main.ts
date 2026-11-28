@@ -916,7 +916,6 @@ function openPreview(plan: Plan = profile ? currentPlan() : 'easy') {
     <div class="preview-door">
       <p class="eyebrow">Day ${day} · ${monthDay(day)}${kind(day)}</p>
       <h2>${esc(t.title)}</h2>
-      ${quoteHtml(day)}
       ${quoteHtml(2)}
       <p class="small preview-note">Each door has a line from Elf or The Grinch.</p>
       <p class="target-chip">Suggested: <b>${fmtDist(milesToUnits(t.miles, u), u)}</b> <span class="plan-tag">${PLANS[plan].label}</span></p>
